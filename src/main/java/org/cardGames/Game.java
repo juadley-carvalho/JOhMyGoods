@@ -16,6 +16,8 @@ public class Game {
         SUNSET("Fase III - Pôr do Sol", "ESPAÇO: abrir a 2ª fileira do mercado"),
         PRODUCE("Fase IV - Produzir", "selecione cartas da mão para completar os recursos   |   "
                 + "ESPAÇO: produzir   |   N: não produzir"),
+        CHAIN("Fase IV - Cadeia de produção", "selecione cartas da mão (bens de outros estabelecimentos "
+                + "entram sozinhos)   |   K: usar a cadeia   |   ESPAÇO: terminar"),
         BUILD("Fase IV - Construir (ainda não implementada)", "ESPAÇO: encerrar a rodada e descartar o mercado");
 
         final String title;
@@ -114,6 +116,17 @@ public class Game {
             }
             case PRODUCE -> {
                 if (!produce()) return;
+                Building working = player.getWorkerBuilding();
+                if (working != null && working.hasProducedThisRound()
+                        && !working.getCard().getChainResources().isEmpty()) {
+                    phase = Phase.CHAIN;
+                } else {
+                    player.finishProduction();
+                    phase = Phase.BUILD;
+                }
+            }
+            case CHAIN -> {
+                player.finishProduction();
                 phase = Phase.BUILD;
             }
             case BUILD -> {
@@ -148,6 +161,25 @@ public class Game {
         if (table.isBusy() || phase != Phase.PRODUCE) return;
         player.finishProduction();
         phase = Phase.BUILD;
+        updateStatus();
+    }
+
+    /** Cadeia de produção: executa uma vez com as cartas selecionadas na mão (pode repetir). */
+    public void runChain() {
+        if (table.isBusy() || phase != Phase.CHAIN) return;
+        clock = 0;
+        Building building = player.getWorkerBuilding();
+        List<Card> selected = player.getHand().stream().filter(Card::isSelected).toList();
+        List<Card> moved = player.runChain(building, selected);
+        if (moved.isEmpty()) {
+            warn("a cadeia precisa de " + describeChain(building) + " - selecione na mão ou produza esses bens antes");
+            return;
+        }
+        int index = player.getBuildings().indexOf(building);
+        for (Card card : moved) {
+            table.moveCard(card, Zone.GOODS, index, clock);
+            clock += STEP_MS;
+        }
         updateStatus();
     }
 
@@ -220,8 +252,12 @@ public class Game {
             table.moveCard(good, Zone.GOODS, index, clock);
             clock += STEP_MS;
         }
-        player.finishProduction();
-        return true;
+        return true; // o trabalhador só sai depois da cadeia de produção
+    }
+
+    private String describeChain(Building building) {
+        List<Resource> chain = building.getCard().getChainResources();
+        return String.join(" + ", chain.stream().map(Resource::name).toList());
     }
 
     private String describeMissing(Building building, List<Card> selected) {
@@ -304,6 +340,11 @@ public class Game {
         if (warning == null && phase == Phase.PRODUCE && working != null) {
             String missing = describeMissing(working, List.of());
             hint = (missing.isEmpty() ? "recursos completos no mercado" : "faltam " + missing)
+                    + "   |   " + hint;
+        }
+        if (warning == null && phase == Phase.CHAIN && working != null) {
+            hint = working.getCard().getName() + ": " + describeChain(working) + " -> "
+                    + working.getCard().getChainResources().size() + " " + working.getCard().getProduct()
                     + "   |   " + hint;
         }
         warning = null;

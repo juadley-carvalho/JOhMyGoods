@@ -129,13 +129,38 @@ public class Player {
         int goods = Production.goods(building, free, used);
         if (goods == 0) return new Production.Result(List.of(), 0);
         hand.removeAll(used);
+        building.setProducedThisRound(true);
         return new Production.Result(used, goods);
+    }
+
+    /**
+     * Executa uma vez a cadeia de produção do estabelecimento (só se ele produziu nesta rodada),
+     * usando as cartas oferecidas da mão e, na falta, bens de outros estabelecimentos.
+     * As cartas usadas saem da mão/estabelecimento de origem e viram bens sobre o estabelecimento.
+     * Devolve as cartas movidas (vazio se não deu).
+     */
+    public List<Card> runChain(Building building, List<Card> offered) {
+        if (!buildings.contains(building)) {
+            throw new IllegalArgumentException(building.getCard().getName() + " não é do jogador");
+        }
+        if (!hand.containsAll(offered)) {
+            throw new IllegalArgumentException("só cartas da mão podem ser usadas na cadeia");
+        }
+        List<Card> items = Production.chainItems(this, building, offered);
+        for (Card card : items) {
+            if (!hand.remove(card)) {
+                buildings.stream().filter(b -> b.removeGood(card)).findFirst();
+            }
+            building.addGood(card);
+        }
+        return items;
     }
 
     /** Fim da produção: o trabalhador volta (atento para a próxima rodada); assistentes permanecem. */
     public void finishProduction() {
         removeWorker();
         worker.setMode(Worker.Mode.ATTENTIVE);
+        buildings.forEach(b -> b.setProducedThisRound(false));
     }
 
     /** O planejamento só termina com o trabalhador alocado (a construção é opcional). */

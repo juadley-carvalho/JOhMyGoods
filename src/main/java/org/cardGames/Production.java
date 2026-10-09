@@ -78,6 +78,40 @@ public final class Production {
         return canProduce(building.getCard(), free, handCards, person.missingAllowed()) ? person.goodsProduced() : 0;
     }
 
+    // ------------------------------------------------------- cadeia de produção (manual p. 8)
+
+    /**
+     * Cartas para uma execução da cadeia do estabelecimento: para cada item da cadeia, uma carta da mão
+     * entre as oferecidas (recurso igual ao item) ou, na falta, um bem de outro estabelecimento do dono
+     * (produto igual ao item). Mercado e guildas não valem. Lista vazia se a cadeia não puder ser feita.
+     * Cada carta devolvida vira 1 bem no estabelecimento (cadeia de 2 itens: 2 bens por vez).
+     */
+    public static List<Card> chainItems(Player owner, Building target, List<Card> offered) {
+        List<Resource> chain = target.getCard().getChainResources();
+        if (chain.isEmpty() || !target.hasProducedThisRound()) return List.of();
+        List<Card> hand = new ArrayList<>(offered);
+        List<Card> items = new ArrayList<>();
+        for (Resource item : chain) {
+            Card card = hand.stream().filter(c -> c.getResource() == item).findFirst()
+                    .orElseGet(() -> goodFrom(owner, target, item, items));
+            if (card == null) return List.of();
+            hand.remove(card);
+            items.add(card);
+        }
+        return List.copyOf(items);
+    }
+
+    /** Um bem do item, em outro estabelecimento do dono, que ainda não foi escolhido. */
+    private static Card goodFrom(Player owner, Building target, Resource item, List<Card> taken) {
+        for (Building source : owner.getBuildings()) {
+            if (source == target || source.getCard().getProduct() != item) continue;
+            for (Card good : source.getGoods().reversed()) {
+                if (!taken.contains(good)) return good;
+            }
+        }
+        return null;
+    }
+
     private static boolean helps(Card building, Map<Resource, Integer> available, Card card) {
         Resource resource = card.getResource();
         if (resource == null) return false;

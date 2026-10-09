@@ -12,6 +12,7 @@ public class Building {
     private final Card card;
     private final List<Card> goods = new ArrayList<>();
     private Person person;
+    private boolean producedThisRound; // libera a cadeia de produção até o fim da produção
 
     public Building(Card card) {
         this.card = card;
@@ -22,6 +23,9 @@ public class Building {
     public List<Card> getGoods() { return List.copyOf(goods); }
     public int goodsCount() { return goods.size(); }
     public void addGood(Card good) { goods.add(good); }
+
+    /** Retira um bem específico (para levá-lo a uma cadeia de produção); false se não estiver aqui. */
+    public boolean removeGood(Card good) { return goods.remove(good); }
 
     /** Retira um bem (para pagar uma construção); null se não houver. */
     public Card removeGood() {
@@ -42,4 +46,8 @@ public class Building {
     }
 
     public void clearPerson() { this.person = null; }
+
+    /** Se produziu pelo menos 1 bem nesta rodada (condição para usar a cadeia de produção). */
+    public boolean hasProducedThisRound() { return producedThisRound; }
+    public void setProducedThisRound(boolean produced) { this.producedThisRound = produced; }
 }

@@ -115,11 +115,13 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** gerar bens extras a partir da mão ou de bens já produzidos.
 
-- [ ] Só disponível se o estabelecimento produziu ≥ 1 bem no turno.
-- [ ] Cadeia com 1 item: recurso da mão (ex.: trigo → Moinho) ou bem de outro estabelecimento (ex.: couro do Curtume → Sapataria).
-- [ ] Cadeia com 2 itens: ambos juntos, gerando 2 bens por vez (ex.: Olaria: argila + carvão).
-- [ ] Mercado e guildas **não** valem para cadeias.
-- [ ] Repetir quantas vezes o jogador quiser.
+- [x] Só disponível se o estabelecimento produziu ≥ 1 bem no turno (`Building.hasProducedThisRound`, zerado em `Player.finishProduction`).
+- [x] Cadeia com 1 item: recurso da mão (ex.: trigo → Moinho) ou bem de outro estabelecimento (ex.: couro do Curtume → Sapataria).
+- [x] Cadeia com 2 itens: ambos juntos, gerando 2 bens por vez (ex.: Olaria: argila + carvão).
+- [x] Mercado e guildas **não** valem para cadeias.
+- [x] Repetir quantas vezes o jogador quiser.
+
+**Fluxo da rodada:** ... → Produzir → **Cadeia de produção** (só se o estabelecimento produziu e tem cadeia) → Construir. Selecionar cartas na mão + **K** executa a cadeia uma vez; itens não cobertos pela mão saem automaticamente dos bens de outros estabelecimentos; **ESPAÇO** termina. As cartas usadas viram os bens (são movidas para cima do estabelecimento, sem comprar). Regras em `Production.chainItems` e `Player.runChain`, testadas em `ChainTest`.
 
 **Validação:** testes reproduzindo os exemplos do manual (p. 8–9: Moinho, Sapataria, Olaria) passam.
 
@@ -204,6 +206,9 @@ Registrados ao fim de cada fase; riscar quando resolvidos.
 - **(Fase 3) Só o trabalhador produz:** a produção na tela cobre apenas o estabelecimento do trabalhador; assistentes (regra já em `Player.produce`) entram na Fase 6, com a escolha de cartas por estabelecimento.
 - **(Fase 3) Recurso PEDRA:** não há estabelecimento com recurso pedra no banco (só as guildas oferecem pedra no mercado). Conferir com o manual.
 - **(Fase 3) Validação visual:** regras testadas, mas a tela de produção não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
+- **(Fase 4) Bens escolhidos automaticamente:** quando a cadeia usa bens de outros estabelecimentos, o jogo pega do primeiro estabelecimento que tem o bem; não há como escolher a origem nem preferir a mão em vez dos bens (a mão só entra se a carta estiver selecionada). Rever se houver dois estabelecimentos com o mesmo produto.
+- **(Fase 4) Recurso PEDRA (atualização):** muitos estabelecimentos *exigem* pedra para produzir, mas só guildas a oferecem no mercado/mão — confirma a importância de conferir com o manual.
+- **(Fase 4) Validação visual:** a etapa de cadeia (tecla K) não foi conferida na tela pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---
