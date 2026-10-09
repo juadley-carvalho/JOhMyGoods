@@ -46,7 +46,7 @@ public class TablePanel extends JPanel {
     private final Map<Zone, List<CardSprite>> zones = new EnumMap<>(Zone.class);
     private final Map<Card, CardSprite> spriteByCard = new IdentityHashMap<>();
     private final Timer animationTimer = new Timer(TICK_MS, e -> tick());
-    private final Map<Card, Badge> badges = new IdentityHashMap<>();
+    private final Map<Card, List<Badge>> badges = new IdentityHashMap<>();
     private Predicate<Card> clickable = card -> false;
     private Consumer<Card> clickAction = card -> { };
     private Consumer<Card> rightClickAction = card -> { };
@@ -106,15 +106,20 @@ public class TablePanel extends JPanel {
     /** Etiqueta desenhada sobre uma carta (ex.: o trabalhador alocado no estabelecimento). */
     private record Badge(String text, Color color) { }
 
-    /** Texto que aparece na barra de status depois de delayMs (passo de um oponente), com a etapa na 1ª linha. */
+    /**
+     * Texto que aparece na barra de status depois de delayMs (passo de um oponente), com a etapa na 1ª linha;
+     * opponents (se não for null) é o resumo dos oponentes logo depois desse passo.
+     */
     private static final class Narration {
         final String title;
         final String text;
+        final List<OpponentView> opponents;
         int delayMs;
 
-        Narration(String title, String text, int delayMs) {
+        Narration(String title, String text, List<OpponentView> opponents, int delayMs) {
             this.title = title;
             this.text = text;
+            this.opponents = opponents;
             this.delayMs = delayMs;
         }
     }
@@ -211,8 +216,9 @@ public class TablePanel extends JPanel {
         this.rightClickAction = action;
     }
 
+    /** Acrescenta uma etiqueta à carta; com mais de uma, elas se empilham de baixo para cima. */
     public void setBadge(Card card, String text, Color color) {
-        badges.put(card, new Badge(text, color));
+        badges.computeIfAbsent(card, c -> new ArrayList<>()).add(new Badge(text, color));
         repaint();
     }
 
@@ -285,7 +291,12 @@ public class TablePanel extends JPanel {
      * A mesa fica ocupada até a última narração ter ficado um tempo na tela.
      */
     public void narrate(String title, String text, int delayMs) {
-        narrations.add(new Narration(title, text, delayMs));
+        narrate(title, text, null, delayMs);
+    }
+
+    /** Como narrate, trocando também as caixas dos oponentes pelo resumo de logo depois do passo. */
+    public void narrate(String title, String text, List<OpponentView> opponents, int delayMs) {
+        narrations.add(new Narration(title, text, opponents == null ? null : List.copyOf(opponents), delayMs));
         startAnimation();
     }
 
@@ -329,6 +340,12 @@ public class TablePanel extends JPanel {
         onPress(new Point(r.x + 20, r.y + r.height - 20), false);
     }
 
+    /** Simula um clique com o botão direito perto da parte de baixo da carta. */
+    void pressRight(Card card) {
+        Rectangle r = spriteByCard.get(card).getHitBounds();
+        onPress(new Point(r.x + 20, r.y + r.height - 20), true);
+    }
+
     /** Simula um clique no ponto (x, y). */
     void pressAt(int x, int y) {
         onPress(new Point(x, y), false);
@@ -347,6 +364,11 @@ public class TablePanel extends JPanel {
     /** Simula o mouse parado no ponto (x, y), para mostrar o detalhe. */
     void hoverAt(int x, int y) {
         mouse = new Point(x, y);
+    }
+
+    /** Área da carta (para as capturas). */
+    Rectangle cardArea(Card card) {
+        return spriteByCard.get(card).getHitBounds();
     }
 
     /** Área da i-ésima ficha de assistente (para as capturas). */
@@ -404,6 +426,7 @@ public class TablePanel extends JPanel {
                 narration = n.text;
                 narrationTitle = n.title;
                 narrationHoldMs = NARRATION_HOLD_MS;
+                if (n.opponents != null) opponents = n.opponents;
                 it.remove();
             }
         }
@@ -518,6 +541,7 @@ public class TablePanel extends JPanel {
      * (o último só fica inteiro se não houver carta a construir ao lado).
      */
     private int visibleWidth(CardSprite sprite) {
+        if (sprite == hoveredBuilding()) return CardSprite.WIDTH;
         List<CardSprite> buildings = zones.get(Zone.BUILDINGS);
         int index = buildings.indexOf(sprite);
         if (index < 0) return CardSprite.WIDTH;
@@ -526,16 +550,34 @@ public class TablePanel extends JPanel {
         return last ? CardSprite.WIDTH : Math.min(CardSprite.WIDTH, step);
     }
 
-    /** Etiquetas numa faixa sobre a parte de baixo da carta; a fonte diminui se o texto não cabe. */
-    private void drawBadges(Graphics2D g) {
-        badges.forEach((card, badge) -> {
+    /**
+     * Estabelecimento sob o mouse: é desenhado inteiro, por cima dos vizinhos que o cobrem quando eles se
+     * sobrepõem (os bens dele continuam atrás, aparecendo em cima).
+     */
+    private CardSprite hoveredBuilding() {
+        if (mouse == null || result != null) return null;
+        CardSprite sprite = topCardAt(mouse);
+        return sprite != null && sprite.getZone() == Zone.BUILDINGS && !sprite.isFlying() ? sprite : null;
+    }
+
+    /** Etiquetas de todas as cartas, menos a do estabelecimento sob o mouse (desenhadas depois dele). */
+    private void drawBadges(Graphics2D g, CardSprite skip) {
+        badges.forEach((card, list) -> {
             CardSprite sprite = spriteByCard.get(card);
-            if (sprite == null || sprite.isFlying()) return;
-            Rectangle r = sprite.getHitBounds();
-            int w = visibleWidth(sprite) - 10;
-            int h = 24;
-            int x = r.x + 5;
-            int y = r.y + r.height - h - 8;
+            if (sprite != null && sprite != skip) drawBadges(g, sprite, list);
+        });
+    }
+
+    /** Etiquetas numa faixa sobre a parte de baixo da carta, empilhadas para cima; a fonte diminui se o texto não cabe. */
+    private void drawBadges(Graphics2D g, CardSprite sprite, List<Badge> list) {
+        if (sprite.isFlying()) return;
+        Rectangle r = sprite.getHitBounds();
+        int w = visibleWidth(sprite) - 10;
+        int h = 24;
+        int x = r.x + 5;
+        for (int i = 0; i < list.size(); i++) {
+            Badge badge = list.get(i);
+            int y = r.y + r.height - h - 8 - i * (h + 4);
             float size = 13f;
             g.setFont(getFont().deriveFont(Font.BOLD, size));
             while (size > 9f && g.getFontMetrics().stringWidth(badge.text()) > w - 6) {
@@ -549,7 +591,7 @@ public class TablePanel extends JPanel {
             String text = ellipsize(g.getFontMetrics(), badge.text(), w - 6);
             int tw = g.getFontMetrics().stringWidth(text);
             g.drawString(text, x + (w - tw) / 2, y + 17);
-        });
+        }
     }
 
     /** Fichas em duas colunas, logo abaixo do descarte. */
@@ -875,7 +917,12 @@ public class TablePanel extends JPanel {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         drawGoodsCount(g2);
-        drawBadges(g2);
+        CardSprite hovered = hoveredBuilding();
+        drawBadges(g2, hovered);
+        if (hovered != null) {
+            hovered.draw(g2);
+            drawBadges(g2, hovered, badges.getOrDefault(hovered.getCard(), List.of()));
+        }
         drawTiles(g2);
         drawTips(g2);
         drawOpponents(g2);

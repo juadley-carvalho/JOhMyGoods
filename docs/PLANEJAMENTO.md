@@ -256,6 +256,18 @@ Testes novos em `ChainTest` (origem do couro com dois Curtumes), `BuildTest` (de
 
 ---
 
+## Fase 13 — Pendentes de interface resolvidos com código
+
+**Objetivo:** fechar os pontos de atenção de interface que não dependiam de decisão do usuário.
+
+- [x] Etiquetas empilhadas: uma carta pode ter várias etiquetas, uma acima da outra (ex.: "Pagar" sobre a do assistente). Na produção, a etiqueta do estabelecimento da vez ("Atento: falta N") continua no lugar da do trabalhador/assistente, por repetir a informação.
+- [x] Estabelecimento sob o mouse aparece inteiro, por cima dos vizinhos que o cobrem (com as etiquetas na largura toda).
+- [x] Resumo dos oponentes a cada passo: cada passo narrado leva o resumo de logo depois dele (`TablePanel.narrate(…, opponents, …)`), então as caixas da esquerda mudam junto com a barra de status.
+
+**Validação:** testes passam (85); capturas novas em `Snapshots`: `escolhas-5a-pagar-com-assistente` (etiquetas empilhadas) e `*-cheia-1b-estabelecimento-inteiro` (mouse sobre um estabelecimento coberto); `*-7-oponentes-jogando` mostra só o oponente da vez com o resumo atualizado.
+
+---
+
 ## Pontos de atenção
 
 Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *Concluídos* com a resolução.
@@ -264,17 +276,16 @@ Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *
 
 - **(Fase 1) Imagens faltantes:** assistentes, trabalhador e verso da carta (o verso usa desenho provisório). Ver *Decisões em aberto*, item 2.
 - **(Fase 6) Sem imagem de assistente:** fichas desenhadas (número, custo, pontos, cores). Ver *Decisões em aberto*, item 2.
-- **(Fase 6) Badges sobrepostos:** cada carta tem uma única etiqueta; na construção, o "Pagar" substitui a etiqueta do assistente.
 - **(Fase 7) IA simples:** o oponente nunca troca a mão, nunca move assistentes, oferece a mão inteira na produção e usa as cadeias até acabar (pode gastar cartas/bens que valeriam mais guardados). Suficiente para testar o fluxo; melhorar se ficar fácil demais.
-- **(Fase 9) Badge de produção:** o estabelecimento da vez mostra "Atento: falta N" (vermelho se não dá para produzir), contando o mercado e as cartas selecionadas; substitui a etiqueta do trabalhador/assistente durante a produção.
 - **(Fase 9) Validação:** testes e `.jar` conferidos (o jar lê banco e imagens de dentro dele), mas a tela inicial, a ajuda e os badges não foram conferidos na tela pelo agente; conferir com `java -jar target/OhMyGoods.jar`.
 - **(Fase 10) Validação visual fora da janela:** as capturas (`Snapshots`) desenham a mesa sem abrir a janela; cobrem as etapas das Fases 2 a 9, mas não a tela inicial nem a ajuda (`JOptionPane`), nem o tempo real das animações e da narração. Conferir com `java -jar target/OhMyGoods.jar`.
 - **(Fase 10) Exaustão segura a ação:** enquanto o humano escolhe o descarte, as outras teclas e cliques ficam bloqueados (só a seleção da mão e ESPAÇO respondem). Fechar a janela nesse momento encerra o jogo normalmente.
-- **(Fase 10) Estabelecimentos sobrepostos:** com muitos estabelecimentos e mão grande, cada um mostra só a parte esquerda (custo, recursos, produção); o selo de bens foi para o canto esquerdo e as etiquetas diminuem a fonte para caber. A carta inteira só aparece no último.
-- **(Fase 10) Resumo dos oponentes:** o modelo do oponente é calculado de uma vez; a tela é que mostra os passos aos poucos. Durante a narração, as caixas da esquerda guardam o resumo antigo e só mudam no fim.
 - **(Fase 11) Dicas cortadas:** com a janela baixa ou muitas fichas de assistente, as últimas dicas são cortadas com "..."; as da situação vêm primeiro para não serem as cortadas.
 - **(Fase 12) Produção garantida:** as dicas do planejamento só contam a produção que o mercado e as guildas já cobrem; a que depende das cartas da mão ou da 2ª fileira do mercado não entra.
 - **(Fase 12) Descarte do oponente:** a utilidade da carta é uma heurística simples (recurso usado pelos estabelecimentos, carta que já dá para construir); não olha o mercado nem o que falta para produzir.
+- **(Fase 13) Estabelecimento inteiro sob o mouse:** só vale enquanto o mouse está na faixa visível dele; ao passar para a parte que estava coberta, o destaque vai para o vizinho (o mesmo que recebe o clique).
+- **(Fase 13) Etiquetas empilhadas:** com 3 ou mais etiquetas na mesma carta (ex.: assistente, origem e pagamento), elas cobrem boa parte da arte; na prática aparecem no máximo 2 ao mesmo tempo.
+- **(Fase 13) Linha "última vez" dos oponentes:** durante a narração, as caixas mostram números atualizados a cada passo, mas a linha "> ..." do resumo continua a da rodada anterior até o oponente terminar.
 
 ### Concluídos
 
@@ -294,6 +305,7 @@ Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *
 - **(Fase 6) Espaço da lateral:** com 3–4 jogadores (6–8 assistentes), as fichas invadiam a área de baixo. → Resolvido na Fase 10: fichas compactas em 2 colunas (8 assistentes ocupam 4 linhas).
 - **(Fase 7) Oponentes jogam de uma vez:** a Fase IV de cada oponente acontecia numa só ação, sem pausa para acompanhar. → Resolvido na Fase 10: cada passo aparece na barra de status, com pausa.
 - **(Fase 7) Espaço do painel:** com 3 oponentes e muitos estabelecimentos, as caixas podiam invadir a fileira de baixo. → Resolvido na Fase 10: caixas resumidas de altura fixa, detalhe ao passar o mouse.
+- **(Fase 6) Badges sobrepostos:** cada carta tinha uma única etiqueta; na construção, o "Pagar" substituía a do assistente. → Resolvido na Fase 13: as etiquetas se empilham.
 - **(Fase 7) Exaustão dos oponentes:** os oponentes descartavam a 1ª metade da mão. → Resolvido na Fase 12: ficam com as cartas mais úteis (`Bot.discardForExhaustion`).
 - **(Fase 8) Tela de resultado simples:** era um `JOptionPane` com tabela HTML. → Resolvido na Fase 10: resultado desenhado na mesa.
 - **(Fase 8) Empate total:** se total e sobra empatam, o resultado mostra "Empate!" (vitória compartilhada). → Conferido: o manual desempata pelas moedas restantes e não fala de empate nelas; a vitória compartilhada fica.
@@ -301,6 +313,9 @@ Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *
 - **(Fases 2 a 8) Validação visual:** planejamento, produção, cadeia (tecla K), pagamento da construção, assistentes, rodada com oponentes e tela de resultado não tinham sido conferidos na tela pelo agente. → Conferido nas capturas da Fase 10 (mesa desenhada fora da janela).
 - **(Fase 9) Janela maior e itens não feitos:** a janela passou para 1280×760 sem refazer o layout; os oponentes ainda jogavam de uma vez e o resultado era um `JOptionPane`. → Feitos na Fase 10.
 - **(Fase 9) Contador no título:** moedas/pontos/cartas apareciam no título da janela, não na mesa. → Resolvido na Fase 12: à direita da 1ª linha da barra de status.
+- **(Fase 9) Badge de produção:** o estabelecimento da vez mostra "Atento: falta N" no lugar da etiqueta do trabalhador/assistente. → Mantido na Fase 13 de propósito (repetiria a informação); as outras etiquetas agora se empilham.
+- **(Fase 10) Estabelecimentos sobrepostos:** com muitos estabelecimentos, cada um mostrava só a parte esquerda; a carta inteira só aparecia no último. → Resolvido na Fase 13: o estabelecimento sob o mouse aparece inteiro.
+- **(Fase 10) Resumo dos oponentes:** durante a narração, as caixas da esquerda guardavam o resumo antigo e só mudavam no fim. → Resolvido na Fase 13: mudam a cada passo narrado.
 - **(Fase 10) Sem troco:** pagar acima do custo é permitido (a barra avisa quanto se perde). → Conferido: é a regra do manual.
 - **(Fase 10) Baralho sem semente:** o `Deck` embaralhava sem `Random`, então a mesma semente não repetia a partida. → Resolvido na Fase 12: o `Deck` usa o `Random` do `Setup`.
 - **(Fase 11) Dicas de orçamento:** "já cabem" comparava o custo só com os bens de agora. → Resolvido na Fase 12: soma a produção já garantida (ver *Pendentes*, Fase 12).

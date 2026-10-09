@@ -91,10 +91,13 @@ public class Game {
             send(card, Zone.DISCARD);
         }
 
-        /** O passo aparece na barra de status quando as cartas dele começam a se mover; depois, uma pausa. */
+        /**
+         * O passo aparece na barra de status quando as cartas dele começam a se mover, junto com o resumo
+         * dos oponentes de logo depois dele; depois, uma pausa.
+         */
         @Override
         public void step(String text) {
-            table.narrate("Fase IV - vez dos oponentes", text, stepStart);
+            table.narrate("Fase IV - vez dos oponentes", text, opponentViews(), stepStart);
             clock = Math.max(clock, stepStart) + BOT_PAUSE_MS;
             stepStart = clock;
         }
@@ -897,6 +900,10 @@ public class Game {
      * ~ se distraído, só depois do planejamento; +A com assistente).
      */
     private void refreshOpponents() {
+        table.setOpponents(opponentViews());
+    }
+
+    private List<TablePanel.OpponentView> opponentViews() {
         List<TablePanel.OpponentView> views = new java.util.ArrayList<>();
         boolean revealed = phase != Phase.NEW_HAND && phase != Phase.SUNRISE && phase != Phase.PLAN && phase != Phase.MOVE;
         for (Player opponent : state.opponents()) {
@@ -923,7 +930,7 @@ public class Game {
             detail.add("* atento   ~ distraído   + assistente");
             views.add(new TablePanel.OpponentView(opponent.getName(), opponent == state.startingPlayer(), lines, detail));
         }
-        table.setOpponents(views);
+        return views;
     }
 
     /** Contador (à direita na barra de status): moedas em bens (o que vale para pagar e para pontuar), pontos e cartas na mão. */
@@ -957,12 +964,16 @@ public class Game {
                 a == toHire ? PAYMENT_COLOR : player.hasColorsFor(a) ? HIREABLE_COLOR : UNAVAILABLE_COLOR)).toList());
     }
 
-    /** Etiquetas sobre os estabelecimentos: assistentes, mudança, origem da cadeia, pagamento e trabalhador. */
+    /**
+     * Etiquetas sobre os estabelecimentos (empilhadas quando há mais de uma): assistentes, mudança, origem da
+     * cadeia, pagamento e trabalhador. Na produção, a do estabelecimento da vez substitui a de quem trabalha nele.
+     */
     private void refreshBadges() {
         table.clearBadges();
+        Building working = phase == Phase.PRODUCE ? producers.peekFirst() : null;
         for (Assistant assistant : player.getAssistants()) {
             Building at = player.getAssistantBuilding(assistant);
-            if (at != null) table.setBadge(at.getCard(), (assistant == moving ? "Mover " : "") + assistant, ASSISTANT_COLOR);
+            if (at != null && at != working) table.setBadge(at.getCard(), (assistant == moving ? "Mover " : "") + assistant, ASSISTANT_COLOR);
         }
         if (phase == Phase.MOVE && moveTarget != null) table.setBadge(moveTarget.getCard(), "Destino", ASSISTANT_COLOR);
         if (phase == Phase.CHAIN) {
@@ -971,7 +982,7 @@ public class Game {
         payment.forEach((b, n) -> table.setBadge(b.getCard(), "Pagar " + n + " (" + n * b.getCard().getGoodValue() + ")",
                 PAYMENT_COLOR));
         Building building = player.getWorkerBuilding();
-        if (building != null) {
+        if (building != null && building != working) {
             boolean attentive = player.getWorker().getMode() == Worker.Mode.ATTENTIVE;
             table.setBadge(building.getCard(), attentive ? "Atento" : "Distraído",
                     attentive ? ATTENTIVE_COLOR : DISTRACTED_COLOR);

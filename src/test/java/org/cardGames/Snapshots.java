@@ -157,6 +157,9 @@ public final class Snapshots {
         shot("4-mover-destino");
         act(() -> table.press(human.getCharcoalBurner().getCard()));
         shot("5-mover-pagando");
+        act(() -> table.press(tanneries[0].getCard()));       // etiquetas empilhadas: assistente e pagamento
+        shot("5a-pagar-com-assistente");
+        act(() -> table.pressRight(tanneries[0].getCard()));
         act(() -> table.press(human.getCharcoalBurner().getCard()));
         act(game::advance);           // paga e move
         shot("6-movido");
@@ -224,6 +227,10 @@ public final class Snapshots {
             if (round == 1) {
                 shot("1-planejamento");
                 hover(table.opponentArea(game.getState().opponents().size() - 1), "1a-detalhe-oponente");
+                Rectangle covered = table.cardArea(human.getBuildings().get(2).getCard());
+                table.hoverAt(covered.x + 20, covered.y + covered.height - 20);
+                shot("1b-estabelecimento-inteiro");
+                table.hoverAt(-1, -1);
             }
             act(game::advance);
             act(game::advance);       // Pôr do Sol
