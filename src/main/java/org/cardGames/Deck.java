@@ -46,6 +46,11 @@ public class Deck {
         return List.copyOf(drawPile);
     }
 
+    /** Pilha de compras e descarte vazios ao mesmo tempo: aplica-se a regra de exaustão. */
+    public boolean isExhausted() {
+        return drawPile.isEmpty() && discardPile.isEmpty();
+    }
+
     public List<Card> getDrawPile() { return List.copyOf(drawPile); }
     public int drawPileSize() { return drawPile.size(); }
     public int discardSize() { return discardPile.size(); }

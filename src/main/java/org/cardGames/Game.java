@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Controlador do jogo: aplica as regras ao modelo (Deck, Player) e pede ao TablePanel
- * que anime o que aconteceu. Por enquanto cobre as fases I, II (com o planejamento) e III do manual.
+ * que anime o que aconteceu. Cobre a rodada de um jogador: fases I a IV do manual.
  */
 public class Game {
 
@@ -18,7 +18,8 @@ public class Game {
                 + "ESPAÇO: produzir   |   N: não produzir"),
         CHAIN("Fase IV - Cadeia de produção", "selecione cartas da mão (bens de outros estabelecimentos "
                 + "entram sozinhos)   |   K: usar a cadeia   |   ESPAÇO: terminar"),
-        BUILD("Fase IV - Construir (ainda não implementada)", "ESPAÇO: encerrar a rodada e descartar o mercado");
+        BUILD("Fase IV - Construir", "clique nos estabelecimentos para escolher os bens do pagamento   |   "
+                + "ESPAÇO: construir e encerrar a rodada   |   N: não construir");
 
         final String title;
         final String hint;
@@ -32,6 +33,7 @@ public class Game {
     private static final int STEP_MS = 120; // intervalo entre uma carta e a próxima
     private static final java.awt.Color ATTENTIVE_COLOR = new java.awt.Color(0x2E7D32);
     private static final java.awt.Color DISTRACTED_COLOR = new java.awt.Color(0xC75B12);
+    private static final java.awt.Color PAYMENT_COLOR = new java.awt.Color(0x1565C0);
 
     private final GameState state;
     private final Deck deck;
@@ -43,6 +45,7 @@ public class Game {
     private boolean handReplaced;
     private int clock; // atraso acumulado da ação em andamento: faz as cartas saírem uma de cada vez
     private String warning; // aviso mostrado no lugar da dica até a próxima ação
+    private final java.util.Map<Building, Integer> payment = new java.util.LinkedHashMap<>(); // bens escolhidos para construir
 
     public Game(GameState state, TablePanel table) {
         this.state = state;
@@ -95,8 +98,8 @@ public class Game {
 
         switch (phase) {
             case NEW_HAND -> {
-                deal();
-                deal();
+                int cards = 2 + player.newHandBonus(); // guildas de carta: +1 com até 3 cartas na mão
+                for (int i = 0; i < cards; i++) deal();
                 phase = Phase.SUNRISE;
             }
             case SUNRISE -> {
@@ -130,10 +133,8 @@ public class Game {
                 phase = Phase.BUILD;
             }
             case BUILD -> {
-                closeMarket();
-                endPlanning();
-                handReplaced = false;
-                phase = Phase.NEW_HAND;
+                if (player.getPlannedBuilding() != null && !build()) return;
+                endRound();
             }
         }
         updateStatus();
@@ -156,11 +157,16 @@ public class Game {
         updateStatus();
     }
 
-    /** Fase IV: abre mão de produzir nesta rodada. */
-    public void skipProduction() {
-        if (table.isBusy() || phase != Phase.PRODUCE) return;
-        player.finishProduction();
-        phase = Phase.BUILD;
+    /** Tecla N, Fase IV: abre mão de produzir ou de construir nesta rodada. */
+    public void decline() {
+        if (table.isBusy()) return;
+        clock = 0;
+        if (phase == Phase.PRODUCE) {
+            player.finishProduction();
+            phase = Phase.BUILD;
+        } else if (phase == Phase.BUILD) {
+            endRound(); // a carta planejada volta para a mão
+        }
         updateStatus();
     }
 
@@ -203,6 +209,10 @@ public class Game {
     // ------------------------------------------------------------- internos
 
     private boolean isClickable(Card card) {
+        if (phase == Phase.BUILD) {
+            Building building = buildingOf(card);
+            return player.getPlannedBuilding() != null && building != null && building.goodsCount() > 0;
+        }
         if (phase != Phase.PLAN) return false;
         if (card == player.getPlannedBuilding()) return true;
         Building building = buildingOf(card);
@@ -212,6 +222,10 @@ public class Game {
     /** Planejamento: clicar num estabelecimento aloca o trabalhador (ou alterna o modo, se ele já está lá); clicar na carta a construir a devolve. */
     private void click(Card card) {
         clock = 0;
+        if (phase == Phase.BUILD) {
+            choosePayment(buildingOf(card));
+            return;
+        }
         if (card == player.getPlannedBuilding()) {
             player.cancelPlannedBuilding();
             send(card, Zone.HAND);
@@ -272,13 +286,41 @@ public class Game {
         return text.toString();
     }
 
+    /** Construção: cada clique põe mais 1 bem do estabelecimento no pagamento; passando do total, volta a 0. */
+    private void choosePayment(Building building) {
+        int n = payment.getOrDefault(building, 0) + 1;
+        if (n > building.goodsCount()) payment.remove(building); else payment.put(building, n);
+        updateStatus();
+    }
+
     /**
-     * Fim da rodada. Enquanto a construção (Fase 5) não existe, a carta planejada retorna para a mão.
+     * Constrói a carta planejada com os bens escolhidos: eles vão para o descarte e a carta
+     * entra nos estabelecimentos. Retorna false (com aviso) se o pagamento não cobre o custo.
      */
-    private void endPlanning() {
+    private boolean build() {
+        Card planned = player.getPlannedBuilding();
+        if (!player.canBuild(payment)) {
+            warn("o pagamento (" + Player.paymentValue(payment) + ") não cobre o custo " + planned.getCost()
+                    + " - escolha mais bens ou N: não construir");
+            return false;
+        }
+        for (Card good : player.buildPlanned(payment)) {
+            deck.discard(good);
+            send(good, Zone.DISCARD);
+        }
+        send(planned, Zone.BUILDINGS);
+        return true;
+    }
+
+    /** Fim da rodada: o mercado é descartado e a carta planejada que não foi construída volta para a mão. */
+    private void endRound() {
+        closeMarket();
         player.finishProduction();
         Card planned = player.cancelPlannedBuilding();
         if (planned != null) send(planned, Zone.HAND);
+        payment.clear();
+        handReplaced = false;
+        phase = Phase.NEW_HAND;
     }
 
     private Building buildingOf(Card card) {
@@ -321,6 +363,15 @@ public class Game {
 
     /** Compra do topo; se a pilha acabou, embaralha o descarte de volta antes (e mostra isso na mesa). */
     private Card draw() {
+        if (deck.isExhausted()) {
+            // Regra de exaustão: compras e descarte vazios -> cada jogador descarta metade da mão
+            for (Player p : state.players()) {
+                for (Card card : p.discardHalf()) {
+                    deck.discard(card);
+                    if (p == player) send(card, Zone.DISCARD);
+                }
+            }
+        }
         if (deck.needsReshuffle()) {
             for (Card card : deck.reshuffle()) {
                 send(card, Zone.DECK);
@@ -347,6 +398,11 @@ public class Game {
                     + working.getCard().getChainResources().size() + " " + working.getCard().getProduct()
                     + "   |   " + hint;
         }
+        Card planned = player.getPlannedBuilding();
+        if (warning == null && phase == Phase.BUILD) {
+            hint = (planned == null ? "nenhuma carta planejada" : "construir " + planned.getName() + ": custo "
+                    + planned.getCost() + ", pagamento " + Player.paymentValue(payment)) + "   |   " + hint;
+        }
         warning = null;
         table.setStatus(phase.title + "   |   " + hint);
         refreshWorkerBadge();
@@ -354,6 +410,8 @@ public class Game {
 
     private void refreshWorkerBadge() {
         table.clearBadges();
+        payment.forEach((b, n) -> table.setBadge(b.getCard(), "Pagar " + n + " (" + n * b.getCard().getGoodValue() + ")",
+                PAYMENT_COLOR));
         Building building = player.getWorkerBuilding();
         if (building == null) return;
         boolean attentive = player.getWorker().getMode() == Worker.Mode.ATTENTIVE;

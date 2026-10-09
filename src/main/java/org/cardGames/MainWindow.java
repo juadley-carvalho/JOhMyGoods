@@ -20,7 +20,7 @@ public class MainWindow extends JFrame {
         table.onKey(KeyEvent.VK_SPACE, game::advance);
         table.onKey(KeyEvent.VK_R, game::replaceHand);
         table.onKey(KeyEvent.VK_C, game::planSelected);
-        table.onKey(KeyEvent.VK_N, game::skipProduction);
+        table.onKey(KeyEvent.VK_N, game::decline);
         table.onKey(KeyEvent.VK_K, game::runChain);
 
         pack();

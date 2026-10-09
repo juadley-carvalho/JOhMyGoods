@@ -131,11 +131,13 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** construir o estabelecimento planejado pagando com bens.
 
-- [ ] Pagar com bens cujo valor somado ≥ custo (sem troco). Valor do bem = moeda no rodapé do estabelecimento.
-- [ ] Interface para escolher quais bens usar no pagamento.
-- [ ] Se não puder/quiser construir, a carta volta para a mão.
-- [ ] Guilda de "+1 carta na Fase I" (se tiver ≤ 3 cartas no início da fase).
-- [ ] Regra de exaustão: compras e descarte vazios → cada jogador descarta metade da mão.
+- [x] Pagar com bens cujo valor somado ≥ custo (sem troco). Valor do bem = moeda no rodapé do estabelecimento.
+- [x] Interface para escolher quais bens usar no pagamento.
+- [x] Se não puder/quiser construir, a carta volta para a mão.
+- [x] Guilda de "+1 carta na Fase I" (se tiver ≤ 3 cartas no início da fase).
+- [x] Regra de exaustão: compras e descarte vazios → cada jogador descarta metade da mão.
+
+**Fluxo da rodada:** ... → Cadeia de produção → **Construir**: cada clique num estabelecimento põe mais 1 bem dele no pagamento (etiqueta "Pagar n (moedas)"; passando do total, volta a 0); **ESPAÇO** constrói e encerra a rodada; **N** não constrói (a carta volta para a mão). Os bens pagos vão para o descarte. Regras em `Player.canBuild`/`buildPlanned`, `Player.newHandBonus`, `Player.discardHalf` e `Deck.isExhausted`, testadas em `BuildTest`. As guildas de carta são as guildas sem produto no banco (cartas 44–46, `Card.isCardGuild`).
 
 **Validação:** exemplo do manual (p. 9: custo 7 pago com 3 + 3 + 2) funciona; o estabelecimento passa a produzir na rodada seguinte.
 
@@ -209,6 +211,11 @@ Registrados ao fim de cada fase; riscar quando resolvidos.
 - **(Fase 4) Bens escolhidos automaticamente:** quando a cadeia usa bens de outros estabelecimentos, o jogo pega do primeiro estabelecimento que tem o bem; não há como escolher a origem nem preferir a mão em vez dos bens (a mão só entra se a carta estiver selecionada). Rever se houver dois estabelecimentos com o mesmo produto.
 - **(Fase 4) Recurso PEDRA (atualização):** muitos estabelecimentos *exigem* pedra para produzir, mas só guildas a oferecem no mercado/mão — confirma a importância de conferir com o manual.
 - **(Fase 4) Validação visual:** a etapa de cadeia (tecla K) não foi conferida na tela pelo agente; conferir rodando `mvnw exec:java`.
+- **(Fase 2) Fim de rodada provisório (atualização):** substituído por `Game.endRound` na Fase 5.
+- **(Fase 5) Exaustão automática:** o jogo escolhe as cartas descartadas (a 1ª metade da mão); no jogo físico o jogador escolhe. Rever junto com a Fase 7.
+- **(Fase 5) Guilda de carta:** cada guilda sem produto conta +1 carta (se houver mais de uma, somam). Conferir com o manual.
+- **(Fase 5) Construção na rodada final / jogador sem carta planejada:** com nada planejado, ESPAÇO apenas encerra a rodada.
+- **(Fase 5) Validação visual:** a escolha de bens para pagamento não foi conferida na tela pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---

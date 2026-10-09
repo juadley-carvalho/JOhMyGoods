@@ -117,6 +117,9 @@ public class Card {
     /** Recurso extra que a guilda dá ao dono para iniciar produções (null se não for guilda de recurso). */
     public Resource getGuildResource() { return isGuild() ? product : null; }
 
+    /** Guilda que dá +1 carta na Fase I (guilda sem produto no banco). */
+    public boolean isCardGuild() { return isGuild() && product == null; }
+
     public BufferedImage getImage() { return image; }
     public BufferedImage getSelectedImage() { return selectedImage; }
     public boolean isSelected() { return isSelected; }

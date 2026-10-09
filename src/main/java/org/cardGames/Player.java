@@ -163,6 +163,57 @@ public class Player {
         buildings.forEach(b -> b.setProducedThisRound(false));
     }
 
+    // ------------------------------------------------------- construção (Fase IV)
+
+    /** Valor em moedas de um pagamento: quantos bens sairão de cada estabelecimento. */
+    public static int paymentValue(Map<Building, Integer> payment) {
+        return payment.entrySet().stream()
+                .mapToInt(e -> e.getValue() * e.getKey().getCard().getGoodValue()).sum();
+    }
+
+    /** Se o pagamento cobre o custo da carta planejada com bens que o jogador realmente tem. */
+    public boolean canBuild(Map<Building, Integer> payment) {
+        if (plannedBuilding == null) return false;
+        for (Map.Entry<Building, Integer> e : payment.entrySet()) {
+            if (!buildings.contains(e.getKey()) || e.getValue() < 0 || e.getValue() > e.getKey().goodsCount()) {
+                return false;
+            }
+        }
+        return paymentValue(payment) >= plannedBuilding.getCost();
+    }
+
+    /**
+     * Constrói a carta planejada pagando com bens (valor somado >= custo, sem troco).
+     * Devolve os bens pagos (quem chama os descarta); o novo estabelecimento produz a partir da próxima rodada.
+     */
+    public List<Card> buildPlanned(Map<Building, Integer> payment) {
+        if (!canBuild(payment)) {
+            throw new IllegalStateException("pagamento insuficiente para " + plannedBuilding);
+        }
+        List<Card> paid = new ArrayList<>();
+        payment.forEach((building, n) -> {
+            for (int i = 0; i < n; i++) paid.add(building.removeGood());
+        });
+        build(plannedBuilding);
+        plannedBuilding = null;
+        return paid;
+    }
+
+    // ------------------------------------------------------- nova mão (Fase I) e exaustão
+
+    /** Cartas extras na Fase I: +1 por guilda de carta, se o jogador tem no máximo 3 cartas no início da fase. */
+    public int newHandBonus() {
+        if (hand.size() > 3) return 0;
+        return (int) buildings.stream().filter(b -> b.getCard().isCardGuild()).count();
+    }
+
+    /** Regra de exaustão: descarta metade da mão (arredondada para baixo). Devolve as cartas descartadas. */
+    public List<Card> discardHalf() {
+        List<Card> discarded = new ArrayList<>(hand.subList(0, hand.size() / 2));
+        hand.removeAll(discarded);
+        return discarded;
+    }
+
     /** O planejamento só termina com o trabalhador alocado (a construção é opcional). */
     public boolean isPlanningComplete() {
         return getWorkerBuilding() != null;
