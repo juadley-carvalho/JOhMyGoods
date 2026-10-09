@@ -14,6 +14,8 @@ public final class GameState {
     private final List<Player> players;
     private final List<Assistant> availableAssistants;
     private int startingPlayer;
+    private boolean finalRound;  // a rodada em andamento é a última
+    private boolean gameOver;
 
     public GameState(Deck deck, Market market, List<Player> players, List<Assistant> availableAssistants) {
         this.deck = deck;
@@ -47,5 +49,29 @@ public final class GameState {
     /** Fim da rodada: o próximo jogador em sentido horário passa a ser o inicial. */
     public void passStartingPlayer() {
         startingPlayer = (startingPlayer + 1) % players.size();
+    }
+
+    /** Estabelecimentos (contando a Carvoaria) que disparam o fim da partida. */
+    public static final int BUILDINGS_TO_END = 8;
+
+    public boolean isFinalRound() { return finalRound; }
+    public boolean isGameOver() { return gameOver; }
+
+    /**
+     * Fim de rodada (depois de toda a Fase IV): se esta era a rodada final, a partida acaba;
+     * senão, se alguém chegou a 8 estabelecimentos, a próxima rodada é a última,
+     * com as cadeias de produção liberadas em todos os estabelecimentos.
+     */
+    public void endRound() {
+        if (finalRound) {
+            gameOver = true;
+            players.forEach(p -> p.setChainsUnlocked(false));
+            return;
+        }
+        passStartingPlayer();
+        if (players.stream().anyMatch(p -> p.getBuildings().size() >= BUILDINGS_TO_END)) {
+            finalRound = true;
+            players.forEach(p -> p.setChainsUnlocked(true));
+        }
     }
 }

@@ -178,11 +178,13 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** encerrar e declarar o vencedor.
 
-- [ ] Gatilho: algum jogador com 8 estabelecimentos (contando a Carvoaria) → termina a rodada atual + 1 rodada extra.
-- [ ] Na rodada final, cadeias de produção liberadas em todos os estabelecimentos.
-- [ ] Pontuação: pontos dos estabelecimentos + assistentes + (soma das moedas dos bens restantes ÷ 5).
-- [ ] Desempate: mais moedas restantes após a conversão.
-- [ ] Tela de resultado com o detalhamento e opção de nova partida.
+- [x] Gatilho: algum jogador com 8 estabelecimentos (contando a Carvoaria) → termina a rodada atual + 1 rodada extra.
+- [x] Na rodada final, cadeias de produção liberadas em todos os estabelecimentos.
+- [x] Pontuação: pontos dos estabelecimentos + assistentes + (soma das moedas dos bens restantes ÷ 5).
+- [x] Desempate: mais moedas restantes após a conversão.
+- [x] Tela de resultado com o detalhamento e opção de nova partida.
+
+**Fluxo:** ao fim de cada rodada, `GameState.endRound` confere o gatilho: se alguém tem 8 estabelecimentos (com a Carvoaria), a próxima rodada é a **final** (a barra de status mostra "RODADA FINAL") e as cadeias ficam liberadas (`Player.areChainsUnlocked`). Na Fase IV da rodada final, depois da produção, o humano passa pela cadeia de cada estabelecimento que tem uma (K/ESPAÇO); o `Bot` usa todas. Ao fim da rodada final o jogo entra em **Fim de partida**: ESPAÇO abre a tela de resultado (posição, pontos de estabelecimentos, assistentes, bens com as moedas, total e sobra) com *Nova partida* ou *Sair*. Regras em `Scoring` e `GameState`, testadas em `EndGameTest` (inclui partidas completas só com a IA, 2 a 4 jogadores).
 
 **Validação:** testes de pontuação passam; uma partida completa chega à tela de resultado.
 
@@ -230,6 +232,10 @@ Registrados ao fim de cada fase; riscar quando resolvidos.
 - **(Fase 7) Exaustão (atualização):** os oponentes também descartam metade da mão, ainda escolhida pelo jogo.
 - **(Fase 7) Espaço do painel:** com 3 oponentes e muitos estabelecimentos as caixas podem invadir a fileira de baixo. Rever na Fase 9.
 - **(Fase 7) Validação visual:** a rodada com oponentes foi validada por testes, mas a tela não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
+- **(Fase 8) Tela de resultado simples:** é um `JOptionPane` com tabela HTML; rever o visual na Fase 9.
+- **(Fase 8) Cadeias na rodada final:** o humano passa por todos os estabelecimentos com cadeia, um de cada vez (inclusive os que já usaram a cadeia ao produzir); o bot usa todas até acabar os itens.
+- **(Fase 8) Empate total:** se total e sobra empatam, o resultado mostra "Empate!" (vitória compartilhada). Conferir com o manual.
+- **(Fase 8) Validação visual:** a partida completa chega ao fim nos testes, mas a tela de resultado não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---

@@ -81,14 +81,15 @@ public final class Production {
     // ------------------------------------------------------- cadeia de produção (manual p. 8)
 
     /**
-     * Cartas para uma execução da cadeia do estabelecimento: para cada item da cadeia, uma carta da mão
+     * Cartas para uma execução da cadeia do estabelecimento (que precisa ter produzido nesta rodada,
+     * exceto na rodada final): para cada item da cadeia, uma carta da mão
      * entre as oferecidas (recurso igual ao item) ou, na falta, um bem de outro estabelecimento do dono
      * (produto igual ao item). Mercado e guildas não valem. Lista vazia se a cadeia não puder ser feita.
      * Cada carta devolvida vira 1 bem no estabelecimento (cadeia de 2 itens: 2 bens por vez).
      */
     public static List<Card> chainItems(Player owner, Building target, List<Card> offered) {
         List<Resource> chain = target.getCard().getChainResources();
-        if (chain.isEmpty() || !target.hasProducedThisRound()) return List.of();
+        if (chain.isEmpty() || !target.hasProducedThisRound() && !owner.areChainsUnlocked()) return List.of();
         List<Card> hand = new ArrayList<>(offered);
         List<Card> items = new ArrayList<>();
         for (Resource item : chain) {

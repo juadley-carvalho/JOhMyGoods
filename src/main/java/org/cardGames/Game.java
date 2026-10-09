@@ -25,7 +25,8 @@ public class Game {
                 + "clique num assistente para contratá-lo em vez de construir   |   "
                 + "ESPAÇO: pagar e encerrar a rodada   |   N: nada"),
         PLACE_ASSISTANT("Fase IV - Alocar assistente", "clique num estabelecimento livre para o novo assistente   |   "
-                + "N: voltar");
+                + "N: voltar"),
+        GAME_OVER("Fim de partida", "ESPAÇO: ver o resultado");
 
         final String title;
         final String hint;
@@ -59,6 +60,8 @@ public class Game {
     private Assistant moving;   // assistente escolhido para mudar de estabelecimento na Fase II
     private final java.util.Deque<Building> producers = new java.util.ArrayDeque<>(); // fila da produção; o primeiro produz agora
     private final java.util.Map<Player, String> lastTurn = new java.util.HashMap<>(); // resumo da última vez de cada oponente
+    private boolean finalChains; // rodada final: as cadeias de todos os estabelecimentos já entraram na fila
+    private java.util.function.Consumer<List<Scoring.Score>> onGameOver = ranking -> { };
 
     /** Mesa vista pelos oponentes: bens comprados vão para a área deles; cartas gastas, para o descarte. */
     private final Bot.Table botTable = new Bot.Table() {
@@ -138,6 +141,11 @@ public class Game {
 
     public GameState getState() { return state; }
 
+    /** Chamado (com a classificação) quando o jogador pede o resultado ao fim da partida. */
+    public void onGameOver(java.util.function.Consumer<List<Scoring.Score>> listener) {
+        this.onGameOver = listener;
+    }
+
     /** Avança para a próxima etapa da rodada. */
     public void advance() {
         if (table.isBusy()) return; // espera as cartas terminarem de se mover
@@ -196,6 +204,10 @@ public class Game {
             }
             case PLACE_ASSISTANT -> {
                 warn("clique num estabelecimento livre para o assistente (N: voltar)");
+                return;
+            }
+            case GAME_OVER -> {
+                onGameOver.accept(Scoring.ranking(state.players()));
                 return;
             }
         }
@@ -357,11 +369,17 @@ public class Game {
     /** Passa para o próximo estabelecimento da fila de produção; no fim da fila, vai para a construção. */
     private void nextProducer() {
         producers.pollFirst();
+        if (producers.isEmpty() && player.areChainsUnlocked() && !finalChains) {
+            // Rodada final: depois da produção, a cadeia de cada estabelecimento pode ser usada
+            finalChains = true;
+            player.getBuildings().stream()
+                    .filter(b -> !b.getCard().getChainResources().isEmpty()).forEach(producers::add);
+        }
         if (producers.isEmpty()) {
             player.finishProduction();
             phase = Phase.BUILD;
         } else {
-            phase = Phase.PRODUCE;
+            phase = finalChains ? Phase.CHAIN : Phase.PRODUCE;
         }
     }
 
@@ -486,11 +504,12 @@ public class Game {
     /**
      * Fim da rodada: os oponentes que faltam jogam, o mercado é descartado, a carta planejada que
      * não foi construída volta para a mão e o próximo jogador passa a ser o inicial.
+     * Se era a rodada final, a partida acaba.
      */
     private void endRound() {
         playOpponents(false);
         closeMarket();
-        state.passStartingPlayer();
+        state.endRound();
         player.finishProduction();
         Card planned = player.cancelPlannedBuilding();
         if (planned != null) send(planned, Zone.HAND);
@@ -498,7 +517,8 @@ public class Game {
         toHire = null;
         moving = null;
         handReplaced = false;
-        phase = Phase.NEW_HAND;
+        finalChains = false;
+        phase = state.isGameOver() ? Phase.GAME_OVER : Phase.NEW_HAND;
     }
 
     private Building buildingOf(Card card) {
@@ -589,7 +609,8 @@ public class Game {
                     + "   |   " + hint;
         }
         warning = null;
-        String starting = state.startingPlayer() == player ? " (você é o inicial)" : "";
+        String starting = (state.isFinalRound() && !state.isGameOver() ? " (RODADA FINAL)" : "")
+                + (state.startingPlayer() == player ? " (você é o inicial)" : "");
         table.setStatus(phase.title + starting + "   |   " + hint);
         refreshWorkerBadge();
         refreshAssistants();

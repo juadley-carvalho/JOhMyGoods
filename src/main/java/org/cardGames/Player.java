@@ -14,6 +14,7 @@ public class Player {
     private final Worker worker = new Worker();
     private final List<Assistant> assistants = new ArrayList<>();
     private Card plannedBuilding;
+    private boolean chainsUnlocked; // rodada final: cadeias em todos os estabelecimentos
 
     public Player() {
         this("Jogador");
@@ -61,6 +62,10 @@ public class Player {
 
     /** Carta escolhida na Fase II para construir (virada para baixo), ou null. */
     public Card getPlannedBuilding() { return plannedBuilding; }
+
+    /** Na rodada final, a cadeia vale em qualquer estabelecimento, mesmo sem ter produzido. */
+    public boolean areChainsUnlocked() { return chainsUnlocked; }
+    public void setChainsUnlocked(boolean unlocked) { this.chainsUnlocked = unlocked; }
 
     // ------------------------------------------------------- planejamento (Fase II)
 

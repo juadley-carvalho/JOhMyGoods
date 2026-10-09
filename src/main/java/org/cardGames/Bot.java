@@ -89,6 +89,9 @@ public final class Bot {
             }
             if (result.succeeded()) produced += runChains(player, building);
         }
+        if (player.areChainsUnlocked()) { // rodada final: cadeias em todos os estabelecimentos
+            for (Building building : player.getBuildings()) produced += runChains(player, building);
+        }
         player.finishProduction();
 
         List<String> summary = new ArrayList<>();

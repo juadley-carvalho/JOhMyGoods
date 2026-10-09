@@ -39,7 +39,7 @@ class RoundTest {
     }
 
     /** Mesa sem tela: compra (reembaralhando o descarte se preciso) e descarta direto no baralho. */
-    private static Bot.Table tableOf(Deck deck) {
+    static Bot.Table tableOf(Deck deck) {
         return new Bot.Table() {
             @Override
             public Card draw() {
@@ -65,7 +65,7 @@ class RoundTest {
     }
 
     /** Uma rodada inteira, todos os jogadores controlados pelo computador. Devolve os resumos da Fase IV. */
-    private static List<String> playRound(GameState state) {
+    static List<String> playRound(GameState state) {
         Bot.Table table = tableOf(state.deck());
         for (Player p : state.turnOrder()) {
             int n = 2 + p.newHandBonus();
@@ -85,7 +85,7 @@ class RoundTest {
     }
 
     /** Todas as cartas do jogo, onde quer que estejam. */
-    private static int cardsOnTable(GameState state) {
+    static int cardsOnTable(GameState state) {
         int total = state.deck().drawPileSize() + state.deck().discardSize() + state.market().getAll().size();
         for (Player p : state.players()) {
             total += p.getHand().size() + (p.getPlannedBuilding() == null ? 0 : 1);
