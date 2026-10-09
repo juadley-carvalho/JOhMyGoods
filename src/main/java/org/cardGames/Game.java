@@ -825,10 +825,73 @@ public class Game {
         String flags = (state.isFinalRound() && !state.isGameOver() ? " (RODADA FINAL)" : "")
                 + (state.startingPlayer() == player ? " (você é o inicial)" : "");
         table.setStatus(title + flags + (context != null ? "   |   " + context : ""), hint, warned);
+        table.setTips(tips());
         refreshInfo();
         refreshBadges();
         refreshAssistants();
         refreshOpponents();
+    }
+
+    /**
+     * Quadro de dicas: primeiro o que vale para a situação do jogador (o que dá para construir ou contratar,
+     * que cartas da mão completam a produção, rodada final), depois as regras da etapa ({@link Help#tips}).
+     */
+    private List<String> tips() {
+        if (discarding > 0) return List.of(Help.EXHAUSTION_TIP);
+        List<String> tips = new java.util.ArrayList<>();
+        int coins = Scoring.score(player).coins();
+        switch (phase) {
+            case PLAN -> {
+                List<String> affordable = player.getHand().stream().filter(c -> c.getCost() <= coins)
+                        .map(c -> c.getName() + " (" + c.getCost() + ")").toList();
+                tips.add("Seus bens valem " + coins + " moedas. " + (affordable.isEmpty()
+                        ? "Nenhuma carta da mão cabe nisso ainda; os bens desta rodada também vão contar."
+                        : "Já cabem: " + String.join(", ", affordable) + "."));
+                if (!player.getAssistants().isEmpty()) {
+                    tips.add("Clique num assistente e depois num estabelecimento livre para mudá-lo ("
+                            + Player.MOVE_ASSISTANT_COST + " moedas).");
+                }
+            }
+            case PRODUCE -> {
+                Building working = producers.peekFirst();
+                if (working != null) {
+                    java.util.Map<Resource, Integer> available = new java.util.EnumMap<>(Resource.class);
+                    available.putAll(Production.freeResources(player, market));
+                    java.util.Set<Resource> missing = Production.missing(working.getCard(), available).keySet();
+                    List<String> useful = player.getHand().stream()
+                            .filter(c -> c.getResource() != null && missing.contains(c.getResource()))
+                            .map(c -> c.getName() + " (" + c.getResource() + ")").toList();
+                    if (!missing.isEmpty()) {
+                        tips.add(useful.isEmpty() ? "Nenhuma carta da mão tem o recurso que falta."
+                                : "Na mão servem: " + String.join(", ", useful) + ".");
+                    }
+                }
+            }
+            case BUILD -> {
+                Card planned = player.getPlannedBuilding();
+                tips.add("Seus bens valem " + coins + " moedas" + (planned == null ? "."
+                        : "; construir " + planned.getName() + " custa " + planned.getCost()
+                        + (planned.getCost() <= coins ? "." : " (não dá).")));
+                List<String> hireable = state.availableAssistants().stream()
+                        .filter(a -> player.hasColorsFor(a) && a.getCost() <= coins && player.hasFreeBuilding())
+                        .map(a -> a + " (" + a.getPoints() + " pts)").toList();
+                if (!hireable.isEmpty()) {
+                    tips.add("Assistentes ao seu alcance: " + String.join(", ", hireable) + ".");
+                } else if (!state.availableAssistants().isEmpty()) {
+                    boolean colors = state.availableAssistants().stream().anyMatch(player::hasColorsFor);
+                    tips.add("Nenhum assistente ao seu alcance: " + (!colors
+                            ? "os que restam exigem cores de estabelecimento que você não tem."
+                            : !player.hasFreeBuilding() ? "não há estabelecimento livre para ele."
+                            : "seus bens não cobrem o custo dos que você poderia contratar."));
+                }
+            }
+            default -> { }
+        }
+        if (state.isFinalRound() && !state.isGameOver()) {
+            tips.add("Rodada final: depois da produção, as cadeias de todos os estabelecimentos podem ser usadas.");
+        }
+        tips.addAll(Help.tips(phase));
+        return tips;
     }
 
     /**

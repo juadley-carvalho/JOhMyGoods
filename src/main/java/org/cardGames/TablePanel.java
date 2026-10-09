@@ -70,6 +70,10 @@ public class TablePanel extends JPanel {
     private Runnable onExit = () -> { };
 
     private List<OpponentView> opponents = List.of();
+    private List<String> tips = List.of(); // quadro de dicas da etapa, abaixo dos assistentes
+
+    private static final int TIPS_GAP = 10;
+    private static final int TIPS_MIN_HEIGHT = 50; // com menos espaço que isso, o quadro não aparece
 
     /**
      * Resumo de um oponente na coluna da esquerda: nome (com destaque se é o inicial), poucas linhas
@@ -219,6 +223,12 @@ public class TablePanel extends JPanel {
     /** Fichas da lateral (assistentes). */
     public void setTiles(List<Tile> tiles) {
         this.tiles = List.copyOf(tiles);
+        repaint();
+    }
+
+    /** Dicas da etapa atual: opções do jogador e lembretes de regra, uma por item. */
+    public void setTips(List<String> tips) {
+        this.tips = List.copyOf(tips);
         repaint();
     }
 
@@ -576,6 +586,57 @@ public class TablePanel extends JPanel {
         }
     }
 
+    /**
+     * Quadro de dicas: na coluna dos assistentes, logo abaixo da última fileira de fichas, até a mão
+     * (contando a carta selecionada, que sobe). Sobe quando os assistentes são contratados.
+     */
+    private Rectangle tipsBounds() {
+        int width = TILE_COLUMNS * TILE_WIDTH + (TILE_COLUMNS - 1) * TILE_GAP;
+        int rows = (tiles.size() + TILE_COLUMNS - 1) / TILE_COLUMNS;
+        int top = Zone.BELOW_PILES + rows * (TILE_HEIGHT + TILE_GAP) + (rows > 0 ? TIPS_GAP - TILE_GAP : 0);
+        int bottom = Zone.bottomRowY(getHeight()) - CardSprite.LIFT - TIPS_GAP;
+        return new Rectangle(getWidth() - TILE_SIDE - width, top, width, bottom - top);
+    }
+
+    /** Dicas em itens, quebradas na largura; o que não cabe na altura é cortado com "...". */
+    private void drawTips(Graphics2D g) {
+        Rectangle area = tipsBounds();
+        if (tips.isEmpty() || area.height < TIPS_MIN_HEIGHT) return;
+        g.setFont(opponentFont());
+        FontMetrics fm = g.getFontMetrics();
+        int bullet = 10;
+        List<String> lines = new ArrayList<>();
+        List<Boolean> starts = new ArrayList<>(); // a linha começa um item (leva o marcador)
+        for (String tip : tips) {
+            List<String> wrapped = wrap(fm, tip, area.width - 12 - bullet);
+            for (int i = 0; i < wrapped.size(); i++) {
+                lines.add(wrapped.get(i));
+                starts.add(i == 0);
+            }
+        }
+        int fit = Math.max(0, (area.height - 25) / LINE_HEIGHT);
+        int shown = Math.min(fit, lines.size());
+        if (shown < lines.size() && shown > 0) {
+            lines.set(shown - 1, ellipsize(fm, lines.get(shown - 1) + " ...", area.width - 12 - bullet));
+        }
+        int h = 20 + shown * LINE_HEIGHT + 5;
+        g.setColor(new Color(0, 0, 0, 90));
+        g.fillRoundRect(area.x, area.y, area.width, h, 10, 10);
+        g.setColor(new Color(0xC8E6C9));
+        g.drawRoundRect(area.x, area.y, area.width, h, 10, 10);
+        g.setFont(getFont().deriveFont(Font.BOLD, 12f));
+        g.drawString("Dicas", area.x + 6, area.y + 15);
+        g.setFont(opponentFont());
+        String help = "H: regras completas";
+        g.drawString(help, area.x + area.width - 6 - fm.stringWidth(help), area.y + 15);
+        g.setColor(Color.WHITE);
+        for (int i = 0; i < shown; i++) {
+            int y = area.y + 20 + (i + 1) * LINE_HEIGHT - 2;
+            if (starts.get(i)) g.drawString("•", area.x + 6, y);
+            g.drawString(lines.get(i), area.x + 6 + bullet, y);
+        }
+    }
+
     private Font opponentFont() {
         return getFont().deriveFont(Font.PLAIN, 11f);
     }
@@ -787,6 +848,7 @@ public class TablePanel extends JPanel {
         drawGoodsCount(g2);
         drawBadges(g2);
         drawTiles(g2);
+        drawTips(g2);
         drawOpponents(g2);
         drawStatus(g2);
         drawHover(g2);

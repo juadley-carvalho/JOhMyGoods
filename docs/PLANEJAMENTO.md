@@ -229,6 +229,19 @@ Testes novos em `ChainTest` (origem do couro com dois Curtumes), `BuildTest` (de
 
 ---
 
+## Fase 11 — Quadro de dicas
+
+**Objetivo:** ajudar o jogador a entender as opções de cada etapa sem sair da mesa (sugestão do usuário: uma área de dicas no canto direito).
+
+- [x] Quadro **Dicas** na coluna da direita, logo abaixo das fichas de assistente, até a fileira de baixo (contando a carta selecionada, que sobe). Sobe quando os assistentes são contratados; com menos de 50 px livres, não aparece.
+- [x] Dicas fixas de cada etapa em `Help.tips` (opções e lembretes de regra), com "H: regras completas" no cabeçalho.
+- [x] Dicas da situação, calculadas em `Game.tips` e mostradas primeiro: no planejamento, quanto valem os bens e que cartas da mão já cabem nesse valor; na produção, que cartas da mão têm o recurso que falta; na construção, se a carta planejada cabe e que assistentes estão ao alcance (ou por que nenhum está); na rodada final, que as cadeias estão liberadas; na exaustão, só a dica do descarte.
+- [x] A ajuda (tecla H) menciona o quadro.
+
+**Validação:** testes passam (83); capturas com 2 e 4 jogadores (8 fichas de assistente) mostram o quadro sem invadir a mão nem o mercado.
+
+---
+
 ## Pontos de atenção
 
 Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *Concluídos* com a resolução.
@@ -252,6 +265,8 @@ Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *
 - **(Fase 10) Estabelecimentos sobrepostos:** com muitos estabelecimentos e mão grande, cada um mostra só a parte esquerda (custo, recursos, produção); o selo de bens foi para o canto esquerdo e as etiquetas diminuem a fonte para caber. A carta inteira só aparece no último.
 - **(Fase 10) Sem troco:** pagar acima do custo é permitido (a barra avisa quanto se perde), como no manual; o jogo não impede.
 - **(Fase 10) Resumo dos oponentes:** o modelo do oponente é calculado de uma vez; a tela é que mostra os passos aos poucos. Durante a narração, as caixas da esquerda guardam o resumo antigo e só mudam no fim.
+- **(Fase 11) Dicas cortadas:** com a janela baixa ou muitas fichas de assistente, as últimas dicas são cortadas com "..."; as da situação vêm primeiro para não serem as cortadas.
+- **(Fase 11) Dicas de orçamento:** "já cabem" compara o custo com os bens de agora; os bens produzidos na rodada ainda vão somar, e o quadro não avisa se a produção vai ou não acontecer.
 
 ### Concluídos
 

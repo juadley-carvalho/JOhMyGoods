@@ -181,7 +181,8 @@ public enum Zone {
         return Math.max(MIN_BUILDING_STEP, Math.min(full, room / buildings));
     }
 
-    private static int bottomRowY(int height) {
+    /** Onde fica a fileira de baixo (estabelecimentos e mão). */
+    static int bottomRowY(int height) {
         return height - CardSprite.HEIGHT - HAND_BOTTOM_MARGIN;
     }
 
