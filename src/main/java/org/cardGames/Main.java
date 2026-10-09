@@ -9,10 +9,8 @@ public class Main {
         new MainWindow(Main::newGame);
     }
 
-    /** Nova partida: pergunta jogadores e nomes na tela inicial e lê as cartas do banco. Cancelar encerra o programa. */
-    static GameState newGame() {
-        List<String> names = StartScreen.ask();
-        if (names == null) System.exit(0);
+    /** Nova partida com os nomes escolhidos na tela inicial: lê as cartas do banco. */
+    static GameState newGame(List<String> names) {
         Database database = new Database();
         GameState state = Setup.newGame(database, names);
         database.closeConnection();

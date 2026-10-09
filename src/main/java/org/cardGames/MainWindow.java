@@ -3,30 +3,50 @@ package org.cardGames;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
-import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 public class MainWindow extends JFrame {
 
-    private final Supplier<GameState> newGame;
-    private final TablePanel table = new TablePanel();
+    private final Function<List<String>, GameState> newGame;
+    private final Dimension size;
+    private TablePanel table;
+    private List<String> lastNames;
 
-    public MainWindow(Supplier<GameState> newGame) {
+    public MainWindow(Function<List<String>, GameState> newGame) {
         super("Oh My Goods!");
         this.newGame = newGame;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         // Área de jogo, sem contar a barra de título: maior com mais jogadores, limitada à tela
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-        table.setPreferredSize(new Dimension(Math.min(1280, screen.width - 40), Math.min(760, screen.height - 100)));
-        add(table, BorderLayout.CENTER);
+        size = new Dimension(Math.min(1280, screen.width - 40), Math.min(760, screen.height - 100));
 
-        Game game = new Game(newGame.get(), table);
+        showStart();
+        pack();
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    /** Tela inicial na própria janela: jogadores e nomes (os da última partida, se houver). */
+    private void showStart() {
+        StartScreen start = new StartScreen(lastNames, this::startGame, () -> System.exit(0));
+        start.setPreferredSize(size);
+        setContentPane(start);
+        revalidate();
+        repaint();
+    }
+
+    /** Troca a tela inicial pela mesa e começa a partida. */
+    private void startGame(List<String> names) {
+        lastNames = names;
+        table = new TablePanel();
+        table.setPreferredSize(size);
+        Game game = new Game(newGame.apply(names), table);
         table.onKey(KeyEvent.VK_SPACE, game::advance);
         table.onKey(KeyEvent.VK_R, game::replaceHand);
         table.onKey(KeyEvent.VK_C, game::planSelected);
@@ -35,11 +55,11 @@ public class MainWindow extends JFrame {
         table.onKey(KeyEvent.VK_H, this::showHelp);
         game.onGameOver(this::showResult);
 
-        pack();
-        setLocationRelativeTo(null);
-        setVisible(true);
+        setContentPane(table);
+        validate(); // a mesa precisa do tamanho antes da distribuição
+        repaint();
 
-        // Depois do primeiro layout da janela, para a distribuição inicial aparecer animada
+        // Depois do primeiro layout da mesa, para a distribuição inicial aparecer animada
         SwingUtilities.invokeLater(game::start);
     }
 
@@ -49,10 +69,7 @@ public class MainWindow extends JFrame {
 
     /** Tela de resultado, desenhada sobre a mesa: detalhamento da pontuação e opção de nova partida. */
     private void showResult(List<Scoring.Score> ranking) {
-        table.showResult(resultView(ranking), () -> {
-            dispose();
-            new MainWindow(newGame);
-        }, () -> {
+        table.showResult(resultView(ranking), this::showStart, () -> {
             dispose();
             System.exit(0);
         });
