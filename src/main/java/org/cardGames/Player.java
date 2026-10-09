@@ -1,6 +1,7 @@
 package org.cardGames;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -54,6 +55,9 @@ public class Player {
 
     public List<Assistant> getAssistants() { return List.copyOf(assistants); }
     public void hire(Assistant assistant) { assistants.add(assistant); }
+
+    /** Custo em moedas para mover um assistente na fase de planejamento. */
+    public static final int MOVE_ASSISTANT_COST = 2;
 
     /** Carta escolhida na Fase II para construir (virada para baixo), ou null. */
     public Card getPlannedBuilding() { return plannedBuilding; }
@@ -171,15 +175,64 @@ public class Player {
                 .mapToInt(e -> e.getValue() * e.getKey().getCard().getGoodValue()).sum();
     }
 
-    /** Se o pagamento cobre o custo da carta planejada com bens que o jogador realmente tem. */
-    public boolean canBuild(Map<Building, Integer> payment) {
-        if (plannedBuilding == null) return false;
+    /** Se o pagamento usa só bens que o jogador realmente tem e vale pelo menos amount moedas. */
+    public boolean covers(Map<Building, Integer> payment, int amount) {
         for (Map.Entry<Building, Integer> e : payment.entrySet()) {
             if (!buildings.contains(e.getKey()) || e.getValue() < 0 || e.getValue() > e.getKey().goodsCount()) {
                 return false;
             }
         }
-        return paymentValue(payment) >= plannedBuilding.getCost();
+        return paymentValue(payment) >= amount;
+    }
+
+    /** Se o pagamento cobre o custo da carta planejada com bens que o jogador realmente tem. */
+    public boolean canBuild(Map<Building, Integer> payment) {
+        return plannedBuilding != null && covers(payment, plannedBuilding.getCost());
+    }
+
+    /** Retira os bens do pagamento; devolve as cartas (quem chama as descarta). */
+    private List<Card> pay(Map<Building, Integer> payment) {
+        List<Card> paid = new ArrayList<>();
+        payment.forEach((building, n) -> {
+            for (int i = 0; i < n; i++) paid.add(building.removeGood());
+        });
+        return paid;
+    }
+
+    /**
+     * Pagamento escolhido pelo jogo para amount moedas: o que paga menos acima do valor
+     * (e, empatando, com menos bens). Vazio se os bens não bastam.
+     */
+    public Map<Building, Integer> cheapestPayment(int amount) {
+        List<Building> sources = buildings.stream()
+                .filter(b -> b.goodsCount() > 0 && b.getCard().getGoodValue() > 0).toList();
+        Map<Building, Integer> best = new LinkedHashMap<>();
+        int[] bestScore = {Integer.MAX_VALUE, Integer.MAX_VALUE};
+        search(sources, 0, amount, new LinkedHashMap<>(), best, bestScore);
+        return best;
+    }
+
+    private static void search(List<Building> sources, int i, int amount, Map<Building, Integer> current,
+                               Map<Building, Integer> best, int[] bestScore) {
+        int value = paymentValue(current);
+        if (value >= amount || i == sources.size()) {
+            int cards = current.values().stream().mapToInt(Integer::intValue).sum();
+            if (value >= amount && (value < bestScore[0] || value == bestScore[0] && cards < bestScore[1])) {
+                bestScore[0] = value;
+                bestScore[1] = cards;
+                best.clear();
+                best.putAll(current);
+            }
+            return;
+        }
+        Building b = sources.get(i);
+        int v = b.getCard().getGoodValue();
+        int max = Math.min(b.goodsCount(), (amount - value + v - 1) / v);
+        for (int n = 0; n <= max; n++) {
+            if (n > 0) current.put(b, n); else current.remove(b);
+            search(sources, i + 1, amount, current, best, bestScore);
+        }
+        current.remove(b);
     }
 
     /**
@@ -190,13 +243,92 @@ public class Player {
         if (!canBuild(payment)) {
             throw new IllegalStateException("pagamento insuficiente para " + plannedBuilding);
         }
-        List<Card> paid = new ArrayList<>();
-        payment.forEach((building, n) -> {
-            for (int i = 0; i < n; i++) paid.add(building.removeGood());
-        });
+        List<Card> paid = pay(payment);
         build(plannedBuilding);
         plannedBuilding = null;
         return paid;
+    }
+
+    // ------------------------------------------------------- assistentes
+
+    /** Estabelecimento onde o assistente está, ou null. */
+    public Building getAssistantBuilding(Assistant assistant) {
+        return buildings.stream().filter(b -> b.getPerson() == assistant).findFirst().orElse(null);
+    }
+
+    /** Se o jogador tem estabelecimentos de todas as cores exigidas pelo assistente (com repetição). */
+    public boolean hasColorsFor(Assistant assistant) {
+        for (Map.Entry<Color, Integer> need : assistant.getRequiredColorCount().entrySet()) {
+            long have = buildings.stream().filter(b -> b.getCard().getColor() == need.getKey()).count();
+            if (have < need.getValue()) return false;
+        }
+        return true;
+    }
+
+    /** Se o estabelecimento pode receber o assistente: é do jogador, produz e está livre (ou já é dele). */
+    public boolean canPlaceAssistant(Assistant assistant, Building building) {
+        return buildings.contains(building)
+                && building.getCard().isProducer()
+                && (!building.isOccupied() || building.getPerson() == assistant);
+    }
+
+    /** Se há algum estabelecimento livre que possa receber um assistente. */
+    public boolean hasFreeBuilding() {
+        return buildings.stream().anyMatch(b -> b.getCard().isProducer() && !b.isOccupied());
+    }
+
+    /** Contratar (em vez de construir): cores exigidas, pagamento >= custo e um estabelecimento livre para ele. */
+    public boolean canHire(Assistant assistant, Map<Building, Integer> payment) {
+        return !assistants.contains(assistant)
+                && hasColorsFor(assistant)
+                && hasFreeBuilding()
+                && covers(payment, assistant.getCost());
+    }
+
+    /**
+     * Contrata o assistente pagando com bens e o aloca imediatamente no estabelecimento livre.
+     * Devolve os bens pagos (quem chama os descarta).
+     */
+    public List<Card> hireAssistant(Assistant assistant, Map<Building, Integer> payment, Building target) {
+        if (!canHire(assistant, payment)) {
+            throw new IllegalStateException("não é possível contratar " + assistant);
+        }
+        if (!canPlaceAssistant(assistant, target)) {
+            throw new IllegalStateException(assistant + " não pode ir para " + target.getCard().getName());
+        }
+        List<Card> paid = pay(payment);
+        assistants.add(assistant);
+        target.setPerson(assistant);
+        return paid;
+    }
+
+    /** Mover um assistente (Fase II) custa 2 moedas em bens. */
+    public boolean canMoveAssistant(Assistant assistant, Building target, Map<Building, Integer> payment) {
+        return assistants.contains(assistant)
+                && getAssistantBuilding(assistant) != target
+                && canPlaceAssistant(assistant, target)
+                && covers(payment, MOVE_ASSISTANT_COST);
+    }
+
+    /** Move o assistente para outro estabelecimento livre, pagando 2 moedas; devolve os bens pagos. */
+    public List<Card> moveAssistant(Assistant assistant, Building target, Map<Building, Integer> payment) {
+        if (!canMoveAssistant(assistant, target, payment)) {
+            throw new IllegalStateException(assistant + " não pode ir para " + target.getCard().getName());
+        }
+        List<Card> paid = pay(payment);
+        Building current = getAssistantBuilding(assistant);
+        if (current != null) current.clearPerson();
+        target.setPerson(assistant);
+        return paid;
+    }
+
+    /** Estabelecimentos com alguém para produzir: o do trabalhador primeiro, depois os dos assistentes. */
+    public List<Building> producingBuildings() {
+        List<Building> list = new ArrayList<>();
+        Building working = getWorkerBuilding();
+        if (working != null) list.add(working);
+        buildings.stream().filter(b -> b.getPerson() instanceof Assistant).forEach(list::add);
+        return list;
     }
 
     // ------------------------------------------------------- nova mão (Fase I) e exaustão

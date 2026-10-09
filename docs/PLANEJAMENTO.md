@@ -84,7 +84,7 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 - [x] Área de estabelecimentos do jogador na mesa, com uma pilha de bens por estabelecimento (`Zone.GOODS` agrupa as cartas pelo índice do estabelecimento) e a mão deslocando-se conforme os estabelecimentos crescem.
 - [x] Clicar em um estabelecimento para alocar o trabalhador; clicar de novo alterna **atento** (todos os recursos → 2 bens) / **distraído** (1 recurso a menos → 1 bem). Etiqueta sobre a carta mostra o modo.
 - [x] Escolher 1 carta da mão para construir (selecionar + tecla **C**; fica virada para baixo em `Zone.PLANNED`; clicar nela devolve para a mão).
-- [ ] Mover assistente pagando 2 moedas — adiado para a Fase 6.
+- [x] Mover assistente pagando 2 moedas — feito na Fase 6.
 - [x] Bloquear avanço inválido: não avança sem o trabalhador alocado; não aloca em guilda, em estabelecimento ocupado nem de outro jogador.
 
 **Fluxo da rodada:** Nova Mão → Nascer do Sol → **Planejamento** (nova etapa) → Pôr do Sol → Produzir. Regras em `Player` (`placeWorker`, `planBuilding`, ...), testadas em `PlanningTest`.
@@ -147,10 +147,12 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** contratar assistentes no lugar de construir.
 
-- [ ] Exibir os assistentes disponíveis na lateral da mesa.
-- [ ] Contratar (máx. 1 por rodada, em vez de construir): pagar moedas + possuir as cores exigidas.
-- [ ] Alocar imediatamente em um estabelecimento livre; mover por 2 moedas na fase de planejamento.
-- [ ] Assistente produz 1 bem e pode iniciar cadeia de produção.
+- [x] Exibir os assistentes disponíveis na lateral da mesa (fichas abaixo do descarte: verde = tem as cores, cinza = não tem, azul = escolhido).
+- [x] Contratar (máx. 1 por rodada, em vez de construir): pagar moedas + possuir as cores exigidas.
+- [x] Alocar imediatamente em um estabelecimento livre; mover por 2 moedas na fase de planejamento.
+- [x] Assistente produz 1 bem e pode iniciar cadeia de produção.
+
+**Fluxo:** no **Planejamento**, clicar no estabelecimento de um assistente e depois num livre o move (2 moedas, bens escolhidos pelo jogo com `Player.cheapestPayment`). Na **Produção**, cada estabelecimento ocupado produz na vez dele (trabalhador primeiro, depois assistentes), cada um com sua cadeia; **N** pula o estabelecimento da vez. Na etapa **Construir ou contratar**, clicar numa ficha de assistente o escolhe; os cliques nos estabelecimentos montam o pagamento; **ESPAÇO** paga e vai para **Alocar assistente** (clicar num estabelecimento livre encerra a rodada; **N** volta). Regras em `Player.canHire`/`hireAssistant`/`moveAssistant`/`producingBuildings`, testadas em `AssistantTest`.
 
 **Validação:** contratar, alocar, produzir e mover um assistente funciona e os testes passam.
 
@@ -216,6 +218,11 @@ Registrados ao fim de cada fase; riscar quando resolvidos.
 - **(Fase 5) Guilda de carta:** cada guilda sem produto conta +1 carta (se houver mais de uma, somam). Conferir com o manual.
 - **(Fase 5) Construção na rodada final / jogador sem carta planejada:** com nada planejado, ESPAÇO apenas encerra a rodada.
 - **(Fase 5) Validação visual:** a escolha de bens para pagamento não foi conferida na tela pelo agente; conferir rodando `mvnw exec:java`.
+- **(Fase 6) Pagamento automático ao mover:** o jogo escolhe os bens (menor valor acima de 2 moedas); no jogo físico o jogador escolhe.
+- **(Fase 6) Espaço da lateral:** as fichas cabem até ~5 assistentes na janela padrão; com 3–4 jogadores (6–8 assistentes) vão invadir a área de baixo. Rever com a Fase 7/9.
+- **(Fase 6) Sem imagem de assistente:** fichas desenhadas (número, custo, pontos, cores). Ver *Decisões em aberto*, item 2.
+- **(Fase 6) Badges sobrepostos:** cada carta tem uma única etiqueta; na construção, o "Pagar" substitui a etiqueta do assistente.
+- **(Fase 6) Validação visual:** contratação, alocação e movimento não foram conferidos na tela pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---

@@ -12,14 +12,18 @@ public class Game {
         NEW_HAND("Fase I - Nova mão de cartas", "R: trocar a mão inteira (opcional)   |   ESPAÇO: receber 2 cartas"),
         SUNRISE("Fase II - Nascer do Sol", "ESPAÇO: abrir o mercado até aparecerem 2 meios sóis"),
         PLAN("Fase II - Planejamento", "clique num estabelecimento: trabalhador (de novo: atento/distraído)   |   "
+                + "clique num assistente e depois num estabelecimento livre: mover (2 moedas)   |   "
                 + "C: construir a carta selecionada   |   ESPAÇO: continuar"),
         SUNSET("Fase III - Pôr do Sol", "ESPAÇO: abrir a 2ª fileira do mercado"),
         PRODUCE("Fase IV - Produzir", "selecione cartas da mão para completar os recursos   |   "
                 + "ESPAÇO: produzir   |   N: não produzir"),
         CHAIN("Fase IV - Cadeia de produção", "selecione cartas da mão (bens de outros estabelecimentos "
                 + "entram sozinhos)   |   K: usar a cadeia   |   ESPAÇO: terminar"),
-        BUILD("Fase IV - Construir", "clique nos estabelecimentos para escolher os bens do pagamento   |   "
-                + "ESPAÇO: construir e encerrar a rodada   |   N: não construir");
+        BUILD("Fase IV - Construir ou contratar", "clique nos estabelecimentos para escolher os bens do pagamento   |   "
+                + "clique num assistente para contratá-lo em vez de construir   |   "
+                + "ESPAÇO: pagar e encerrar a rodada   |   N: nada"),
+        PLACE_ASSISTANT("Fase IV - Alocar assistente", "clique num estabelecimento livre para o novo assistente   |   "
+                + "N: voltar");
 
         final String title;
         final String hint;
@@ -34,6 +38,9 @@ public class Game {
     private static final java.awt.Color ATTENTIVE_COLOR = new java.awt.Color(0x2E7D32);
     private static final java.awt.Color DISTRACTED_COLOR = new java.awt.Color(0xC75B12);
     private static final java.awt.Color PAYMENT_COLOR = new java.awt.Color(0x1565C0);
+    private static final java.awt.Color ASSISTANT_COLOR = new java.awt.Color(0x6A1B9A);
+    private static final java.awt.Color HIREABLE_COLOR = new java.awt.Color(0x1B5E20);
+    private static final java.awt.Color UNAVAILABLE_COLOR = new java.awt.Color(0x555555);
 
     private final GameState state;
     private final Deck deck;
@@ -45,7 +52,10 @@ public class Game {
     private boolean handReplaced;
     private int clock; // atraso acumulado da ação em andamento: faz as cartas saírem uma de cada vez
     private String warning; // aviso mostrado no lugar da dica até a próxima ação
-    private final java.util.Map<Building, Integer> payment = new java.util.LinkedHashMap<>(); // bens escolhidos para construir
+    private final java.util.Map<Building, Integer> payment = new java.util.LinkedHashMap<>(); // bens escolhidos para construir/contratar
+    private Assistant toHire;   // assistente escolhido na Fase IV (em vez de construir)
+    private Assistant moving;   // assistente escolhido para mudar de estabelecimento na Fase II
+    private final java.util.Deque<Building> producers = new java.util.ArrayDeque<>(); // fila da produção; o primeiro produz agora
 
     public Game(GameState state, TablePanel table) {
         this.state = state;
@@ -54,6 +64,7 @@ public class Game {
         this.market = state.market();
         this.table = table;
         table.onCardClick(this::isClickable, this::click);
+        table.onTileClick(this::isTileClickable, this::clickTile);
     }
 
     /**
@@ -115,26 +126,33 @@ public class Game {
             }
             case SUNSET -> {
                 openMarketRow(Zone.MARKET_SUNSET);
+                producers.clear();
+                producers.addAll(player.producingBuildings());
                 phase = Phase.PRODUCE;
+                if (producers.isEmpty()) nextProducer();
             }
             case PRODUCE -> {
                 if (!produce()) return;
-                Building working = player.getWorkerBuilding();
-                if (working != null && working.hasProducedThisRound()
-                        && !working.getCard().getChainResources().isEmpty()) {
+                Building producing = producers.peekFirst();
+                if (producing.hasProducedThisRound() && !producing.getCard().getChainResources().isEmpty()) {
                     phase = Phase.CHAIN;
                 } else {
-                    player.finishProduction();
-                    phase = Phase.BUILD;
+                    nextProducer();
                 }
             }
-            case CHAIN -> {
-                player.finishProduction();
-                phase = Phase.BUILD;
-            }
+            case CHAIN -> nextProducer();
             case BUILD -> {
-                if (player.getPlannedBuilding() != null && !build()) return;
-                endRound();
+                if (toHire != null) {
+                    if (!checkHire()) return;
+                    phase = Phase.PLACE_ASSISTANT;
+                } else {
+                    if (player.getPlannedBuilding() != null && !build()) return;
+                    endRound();
+                }
+            }
+            case PLACE_ASSISTANT -> {
+                warn("clique num estabelecimento livre para o assistente (N: voltar)");
+                return;
             }
         }
         updateStatus();
@@ -162,7 +180,8 @@ public class Game {
         if (table.isBusy()) return;
         clock = 0;
         if (phase == Phase.PRODUCE) {
-            player.finishProduction();
+            nextProducer();
+        } else if (phase == Phase.PLACE_ASSISTANT) {
             phase = Phase.BUILD;
         } else if (phase == Phase.BUILD) {
             endRound(); // a carta planejada volta para a mão
@@ -174,7 +193,7 @@ public class Game {
     public void runChain() {
         if (table.isBusy() || phase != Phase.CHAIN) return;
         clock = 0;
-        Building building = player.getWorkerBuilding();
+        Building building = producers.peekFirst();
         List<Card> selected = player.getHand().stream().filter(Card::isSelected).toList();
         List<Card> moved = player.runChain(building, selected);
         if (moved.isEmpty()) {
@@ -209,14 +228,97 @@ public class Game {
     // ------------------------------------------------------------- internos
 
     private boolean isClickable(Card card) {
+        Building building = buildingOf(card);
         if (phase == Phase.BUILD) {
-            Building building = buildingOf(card);
-            return player.getPlannedBuilding() != null && building != null && building.goodsCount() > 0;
+            return (player.getPlannedBuilding() != null || toHire != null) && building != null && building.goodsCount() > 0;
+        }
+        if (phase == Phase.PLACE_ASSISTANT) {
+            return building != null && player.canPlaceAssistant(toHire, building);
         }
         if (phase != Phase.PLAN) return false;
         if (card == player.getPlannedBuilding()) return true;
-        Building building = buildingOf(card);
-        return building != null && player.canPlaceWorker(building);
+        if (building == null) return false;
+        if (moving != null && player.canPlaceAssistant(moving, building)) return true;
+        return player.canPlaceWorker(building) || building.getPerson() instanceof Assistant;
+    }
+
+    /** Assistentes da lateral: clicáveis na construção (escolher quem contratar). */
+    private boolean isTileClickable(int index) {
+        return phase == Phase.BUILD && index < state.availableAssistants().size();
+    }
+
+    /** Construção: clicar num assistente o escolhe para contratar (de novo: desiste); a carta planejada fica de lado. */
+    private void clickTile(int index) {
+        clock = 0;
+        Assistant assistant = state.availableAssistants().get(index);
+        toHire = (toHire == assistant) ? null : assistant;
+        updateStatus();
+    }
+
+    /** Se dá para contratar o assistente escolhido com o pagamento atual; senão, avisa o motivo. */
+    private boolean checkHire() {
+        if (!player.hasColorsFor(toHire)) {
+            warn(toHire + " exige estabelecimentos " + describeColors(toHire));
+        } else if (!player.hasFreeBuilding()) {
+            warn("não há estabelecimento livre para o assistente");
+        } else if (!player.canHire(toHire, payment)) {
+            warn("o pagamento (" + Player.paymentValue(payment) + ") não cobre o custo " + toHire.getCost()
+                    + " - escolha mais bens");
+        } else {
+            return true;
+        }
+        return false;
+    }
+
+    /** Aloca o assistente recém-contratado (paga com os bens escolhidos) e encerra a rodada. */
+    private void placeHired(Building building) {
+        for (Card good : player.hireAssistant(toHire, payment, building)) {
+            deck.discard(good);
+            send(good, Zone.DISCARD);
+        }
+        state.availableAssistants().remove(toHire);
+        endRound();
+    }
+
+    /** Fase II: muda o assistente escolhido para outro estabelecimento, pagando 2 moedas com os bens mais baratos. */
+    private void moveAssistant(Building target) {
+        java.util.Map<Building, Integer> cost = player.cheapestPayment(Player.MOVE_ASSISTANT_COST);
+        if (!player.canMoveAssistant(moving, target, cost)) {
+            moving = null;
+            warn("mover o assistente custa " + Player.MOVE_ASSISTANT_COST + " moedas em bens - não há bens suficientes");
+            return;
+        }
+        for (Card good : player.moveAssistant(moving, target, cost)) {
+            deck.discard(good);
+            send(good, Zone.DISCARD);
+        }
+        moving = null;
+    }
+
+    private String describeColors(Assistant assistant) {
+        return String.join(", ", assistant.getRequiredColors().stream().map(Game::colorName).toList());
+    }
+
+    private static String colorName(Color color) {
+        return switch (color) {
+            case AZUL_ESCURO -> "az.escuro";
+            case AZUL_CLARO -> "az.claro";
+            case AMARELO -> "amarelo";
+            case VERMELHO -> "vermelho";
+            case VERDE -> "verde";
+            case PRETO -> "preto";
+        };
+    }
+
+    /** Passa para o próximo estabelecimento da fila de produção; no fim da fila, vai para a construção. */
+    private void nextProducer() {
+        producers.pollFirst();
+        if (producers.isEmpty()) {
+            player.finishProduction();
+            phase = Phase.BUILD;
+        } else {
+            phase = Phase.PRODUCE;
+        }
     }
 
     /** Planejamento: clicar num estabelecimento aloca o trabalhador (ou alterna o modo, se ele já está lá); clicar na carta a construir a devolve. */
@@ -226,12 +328,23 @@ public class Game {
             choosePayment(buildingOf(card));
             return;
         }
+        if (phase == Phase.PLACE_ASSISTANT) {
+            placeHired(buildingOf(card));
+            updateStatus();
+            return;
+        }
         if (card == player.getPlannedBuilding()) {
             player.cancelPlannedBuilding();
             send(card, Zone.HAND);
         } else {
             Building building = buildingOf(card);
-            if (building == player.getWorkerBuilding()) {
+            if (moving != null && building == player.getAssistantBuilding(moving)) {
+                moving = null; // clicou de novo no assistente: desiste de mover
+            } else if (moving != null && player.canPlaceAssistant(moving, building)) {
+                moveAssistant(building);
+            } else if (building.getPerson() instanceof Assistant assistant) {
+                moving = assistant;
+            } else if (building == player.getWorkerBuilding()) {
                 player.getWorker().toggleMode();
             } else {
                 player.placeWorker(building);
@@ -241,12 +354,12 @@ public class Game {
     }
 
     /**
-     * Produz no estabelecimento do trabalhador com as cartas selecionadas na mão:
+     * Produz no estabelecimento da vez (trabalhador ou assistente) com as cartas selecionadas na mão:
      * as cartas usadas vão para o descarte e os bens saem da pilha de compras para cima do estabelecimento.
      * Retorna false (com aviso) se os recursos não bastam.
      */
     private boolean produce() {
-        Building building = player.getWorkerBuilding();
+        Building building = producers.peekFirst();
         if (building == null) return true; // nada a produzir
         List<Card> selected = player.getHand().stream().filter(Card::isSelected).toList();
         Production.Result result = player.produce(building, market, selected);
@@ -266,7 +379,7 @@ public class Game {
             table.moveCard(good, Zone.GOODS, index, clock);
             clock += STEP_MS;
         }
-        return true; // o trabalhador só sai depois da cadeia de produção
+        return true; // o trabalhador só sai depois de toda a produção
     }
 
     private String describeChain(Building building) {
@@ -319,6 +432,8 @@ public class Game {
         Card planned = player.cancelPlannedBuilding();
         if (planned != null) send(planned, Zone.HAND);
         payment.clear();
+        toHire = null;
+        moving = null;
         handReplaced = false;
         phase = Phase.NEW_HAND;
     }
@@ -387,11 +502,16 @@ public class Game {
 
     private void updateStatus() {
         String hint = (warning != null) ? "ATENÇÃO: " + warning : phase.hint;
-        Building working = player.getWorkerBuilding();
+        Building working = producers.peekFirst();
         if (warning == null && phase == Phase.PRODUCE && working != null) {
             String missing = describeMissing(working, List.of());
-            hint = (missing.isEmpty() ? "recursos completos no mercado" : "faltam " + missing)
+            hint = working.getCard().getName() + " (" + describePerson(working) + "): "
+                    + (missing.isEmpty() ? "recursos completos no mercado" : "faltam " + missing)
                     + "   |   " + hint;
+        }
+        if (warning == null && phase == Phase.PLAN && moving != null) {
+            hint = "mover " + moving + ": clique num estabelecimento livre (" + Player.MOVE_ASSISTANT_COST
+                    + " moedas)   |   " + hint;
         }
         if (warning == null && phase == Phase.CHAIN && working != null) {
             hint = working.getCard().getName() + ": " + describeChain(working) + " -> "
@@ -400,16 +520,35 @@ public class Game {
         }
         Card planned = player.getPlannedBuilding();
         if (warning == null && phase == Phase.BUILD) {
-            hint = (planned == null ? "nenhuma carta planejada" : "construir " + planned.getName() + ": custo "
-                    + planned.getCost() + ", pagamento " + Player.paymentValue(payment)) + "   |   " + hint;
+            String target = toHire != null ? "contratar " + toHire + ": custo " + toHire.getCost()
+                    : planned == null ? null : "construir " + planned.getName() + ": custo " + planned.getCost();
+            hint = (target == null ? "nenhuma carta planejada" : target + ", pagamento " + Player.paymentValue(payment))
+                    + "   |   " + hint;
         }
         warning = null;
         table.setStatus(phase.title + "   |   " + hint);
         refreshWorkerBadge();
+        refreshAssistants();
+    }
+
+    private String describePerson(Building building) {
+        return building.getPerson() instanceof Assistant a ? a.toString() : "trabalhador";
+    }
+
+    /** Assistentes disponíveis na lateral: verde se o jogador tem as cores, azul se escolhido para contratar. */
+    private void refreshAssistants() {
+        table.setTiles(state.availableAssistants().stream().map(a -> new TablePanel.Tile(
+                a + "  custo " + a.getCost() + "  " + a.getPoints() + " pts",
+                describeColors(a),
+                a == toHire ? PAYMENT_COLOR : player.hasColorsFor(a) ? HIREABLE_COLOR : UNAVAILABLE_COLOR)).toList());
     }
 
     private void refreshWorkerBadge() {
         table.clearBadges();
+        for (Assistant assistant : player.getAssistants()) {
+            Building at = player.getAssistantBuilding(assistant);
+            if (at != null) table.setBadge(at.getCard(), (assistant == moving ? "Mover " : "") + assistant, ASSISTANT_COLOR);
+        }
         payment.forEach((b, n) -> table.setBadge(b.getCard(), "Pagar " + n + " (" + n * b.getCard().getGoodValue() + ")",
                 PAYMENT_COLOR));
         Building building = player.getWorkerBuilding();

@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 /**
@@ -44,6 +46,18 @@ public class TablePanel extends JPanel {
     private Predicate<Card> clickable = card -> false;
     private Consumer<Card> clickAction = card -> { };
     private String status = "";
+    private List<Tile> tiles = List.of();
+    private IntPredicate tileClickable = i -> false;
+    private IntConsumer tileAction = i -> { };
+
+    /** Ficha desenhada na lateral direita da mesa (ex.: assistente disponível para contratar). */
+    public record Tile(String title, String detail, Color color) { }
+
+    private static final int TILE_WIDTH = 150;
+    private static final int TILE_HEIGHT = 40;
+    private static final int TILE_GAP = 4;
+    private static final int TILE_SIDE = 50;
+    private static final int TILE_TOP = 30 + CardSprite.HEIGHT + 10; // logo abaixo do descarte
 
     /** Etiqueta desenhada sobre uma carta (ex.: o trabalhador alocado no estabelecimento). */
     private record Badge(String text, Color color) { }
@@ -126,6 +140,29 @@ public class TablePanel extends JPanel {
     public void clearBadges() {
         badges.clear();
         repaint();
+    }
+
+    /** Fichas da lateral (assistentes), e quais respondem ao clique e o que fazer (recebe o índice). */
+    public void setTiles(List<Tile> tiles) {
+        this.tiles = List.copyOf(tiles);
+        repaint();
+    }
+
+    public void onTileClick(IntPredicate clickable, IntConsumer action) {
+        this.tileClickable = clickable;
+        this.tileAction = action;
+    }
+
+    private Rectangle tileBounds(int i) {
+        return new Rectangle(getWidth() - TILE_SIDE - TILE_WIDTH, TILE_TOP + i * (TILE_HEIGHT + TILE_GAP),
+                TILE_WIDTH, TILE_HEIGHT);
+    }
+
+    private int tileAt(Point p) {
+        for (int i = 0; i < tiles.size(); i++) {
+            if (tileBounds(i).contains(p)) return i;
+        }
+        return -1;
     }
 
     public void setStatus(String status) {
@@ -216,6 +253,11 @@ public class TablePanel extends JPanel {
 
     private void onPress(Point p) {
         if (isBusy()) return;
+        int tile = tileAt(p);
+        if (tile >= 0) {
+            if (tileClickable.test(tile)) tileAction.accept(tile);
+            return;
+        }
         CardSprite sprite = topCardAt(p);
         if (sprite == null) return;
 
@@ -230,7 +272,9 @@ public class TablePanel extends JPanel {
 
     private void updateCursor(Point p) {
         CardSprite sprite = topCardAt(p);
-        boolean canClick = sprite != null && (sprite.getZone().isSelectable() || clickable.test(sprite.getCard()));
+        int tile = tileAt(p);
+        boolean canClick = tile >= 0 ? tileClickable.test(tile)
+                : sprite != null && (sprite.getZone().isSelectable() || clickable.test(sprite.getCard()));
         setCursor(Cursor.getPredefinedCursor(canClick ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
     }
 
@@ -276,6 +320,22 @@ public class TablePanel extends JPanel {
         });
     }
 
+    /** Fichas da lateral: título em negrito e detalhe embaixo. */
+    private void drawTiles(Graphics2D g) {
+        for (int i = 0; i < tiles.size(); i++) {
+            Tile tile = tiles.get(i);
+            Rectangle r = tileBounds(i);
+            g.setColor(tile.color());
+            g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+            g.setColor(Color.WHITE);
+            g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
+            g.drawString(tile.title(), r.x + 8, r.y + 16);
+            g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
+            g.drawString(tile.detail(), r.x + 8, r.y + 32);
+        }
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g); // pinta o fundo
@@ -286,6 +346,7 @@ public class TablePanel extends JPanel {
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         drawGoodsCount(g2);
         drawBadges(g2);
+        drawTiles(g2);
         g2.setColor(Color.WHITE);
         g2.setFont(getFont().deriveFont(Font.BOLD, 14f));
         g2.drawString(status, 20, 20);
