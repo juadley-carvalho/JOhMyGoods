@@ -200,26 +200,44 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 ---
 
+## Fase 10 — Escolhas do jogador e acabamento
+
+**Objetivo:** devolver ao jogador as escolhas que o manual dá a ele e fechar os pontos de atenção de interface.
+
+- [ ] Validação visual: rodar o `.jar` e capturar a tela numa partida com 2 e com 4 jogadores (planejamento, produção, cadeia, construção, contratação, resultado). Serve de base para decidir o que mudar no layout.
+- [ ] Pagamento escolhido pelo jogador (construir, contratar, mover assistente): clicar nos bens sobre os estabelecimentos para marcar o que pagar e confirmar quando o total cobrir o custo (sem troco). Fecha o ponto da Fase 6 e completa o da Fase 5.
+- [ ] Origem dos bens na cadeia: perguntar só quando mais de um estabelecimento tiver o mesmo bem; nos outros casos, continua automático (Fase 4).
+- [ ] Exaustão: o humano escolhe as cartas a descartar (metade da mão, arredondada para baixo); o bot continua automático (Fases 5/7).
+- [ ] Ritmo dos oponentes: pausa curta entre os passos de cada bot na Fase IV, com a barra de status dizendo o que ele fez (ex.: "Bot 2 produziu 2 pães na Padaria") (Fase 7).
+- [ ] Layout, conforme o que a validação mostrar: assistentes livres numa fileira compacta ou lista; oponentes em caixas resumidas (pontos, nº de estabelecimentos, bens), com detalhe ao passar o mouse (Fases 2, 6 e 7).
+- [ ] Tela de resultado desenhada na mesa (pontuação por categoria e botão "Jogar de novo"), no lugar do `JOptionPane` (Fase 8).
+
+**Fora desta fase:** IA melhor (só se o jogo ficar fácil demais), imagens faltantes (Decisão em aberto 2), Documentação Técnica (Decisão em aberto 3) e `JAVA_HOME` (configuração do sistema).
+
+**Validação:** testes passam; as escolhas novas funcionam na tela (capturas antes/depois); partida completa com 4 jogadores sem sobreposição na mesa.
+
+---
+
 ## Pontos de atenção
 
 Registrados ao fim de cada fase; riscar quando resolvidos.
 
 - ~~**(Fase 1) Pilha única de bens:** `Zone.GOODS` mostra os bens de todos os estabelecimentos numa só pilha. Resolver na Fase 2.~~ Resolvido na Fase 2.
-- **(Fase 1) Preparação não conferida no manual:** o PDF não pôde ser lido no ambiente de desenvolvimento; Carvoaria + 7 carvões, 5 cartas e 2 assistentes por jogador seguem este planejamento. Conferir com o manual (p. 2).
+- ~~**(Fase 1) Preparação não conferida no manual:** o PDF não pôde ser lido no ambiente de desenvolvimento; Carvoaria + 7 carvões, 5 cartas e 2 assistentes por jogador seguem este planejamento. Conferir com o manual (p. 2).~~ Conferido em `docs/oh_my_goods_manual.md`: Carvoaria + 7 carvões, 5 cartas e assistentes 4/6/8 (2 por jogador) batem com o manual.
 - **(Fase 1) Imagens faltantes:** assistentes, trabalhador e verso da carta (o verso usa desenho provisório). Ver *Decisões em aberto*, item 2.
 - **(Fase 2) Fim de rodada provisório:** como produção e construção ainda não existem, ao encerrar a rodada o trabalhador sai e a carta planejada volta para a mão (`Game.endPlanning`). Substituir nas Fases 3 e 5.
-- **(Fase 2) Trabalhador obrigatório:** o avanço exige o trabalhador alocado; a construção é opcional. Conferir com o manual.
+- ~~**(Fase 2) Trabalhador obrigatório:** o avanço exige o trabalhador alocado; a construção é opcional. Conferir com o manual.~~ Conferido: o manual manda colocar o trabalhador num estabelecimento; construir é opcional.
 - **(Fase 2) Largura da mesa:** com muitos estabelecimentos (até 8 + carta a construir) a fileira de baixo ocupa a largura toda e a mão fica espremida. Rever o layout (Fase 9 ou antes, se atrapalhar).
 - **(Fase 2) Validação visual:** a interface foi compilada e as regras testadas, mas a tela não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 3) Só o trabalhador produz:** a produção na tela cobre apenas o estabelecimento do trabalhador; assistentes (regra já em `Player.produce`) entram na Fase 6, com a escolha de cartas por estabelecimento.
-- **(Fase 3) Recurso PEDRA:** não há estabelecimento com recurso pedra no banco (só as guildas oferecem pedra no mercado). Conferir com o manual.
+- ~~**(Fase 3) Recurso PEDRA:** não há estabelecimento com recurso pedra no banco (só as guildas oferecem pedra no mercado). Conferir com o manual.~~ Conferido: pedra é o recurso das cartas pretas (guildas), 17 cartas — mesma quantidade das outras cores (verde é a maior, 26), como diz o manual.
 - **(Fase 3) Validação visual:** regras testadas, mas a tela de produção não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 4) Bens escolhidos automaticamente:** quando a cadeia usa bens de outros estabelecimentos, o jogo pega do primeiro estabelecimento que tem o bem; não há como escolher a origem nem preferir a mão em vez dos bens (a mão só entra se a carta estiver selecionada). Rever se houver dois estabelecimentos com o mesmo produto.
-- **(Fase 4) Recurso PEDRA (atualização):** muitos estabelecimentos *exigem* pedra para produzir, mas só guildas a oferecem no mercado/mão — confirma a importância de conferir com o manual.
+- ~~**(Fase 4) Recurso PEDRA (atualização):** muitos estabelecimentos *exigem* pedra para produzir, mas só guildas a oferecem no mercado/mão — confirma a importância de conferir com o manual.~~ Resolvido junto com o item da Fase 3.
 - **(Fase 4) Validação visual:** a etapa de cadeia (tecla K) não foi conferida na tela pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 2) Fim de rodada provisório (atualização):** substituído por `Game.endRound` na Fase 5.
 - **(Fase 5) Exaustão automática:** o jogo escolhe as cartas descartadas (a 1ª metade da mão); no jogo físico o jogador escolhe. Rever junto com a Fase 7.
-- **(Fase 5) Guilda de carta:** cada guilda sem produto conta +1 carta (se houver mais de uma, somam). Conferir com o manual.
+- ~~**(Fase 5) Guilda de carta:** cada guilda sem produto conta +1 carta (se houver mais de uma, somam). Conferir com o manual.~~ Conferido: +1 carta com até 3 cartas na mão. O manual descreve o efeito por guilda, então duas guildas somam +2 (interpretação mantida).
 - **(Fase 5) Construção na rodada final / jogador sem carta planejada:** com nada planejado, ESPAÇO apenas encerra a rodada.
 - **(Fase 5) Validação visual:** a escolha de bens para pagamento não foi conferida na tela pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 6) Pagamento automático ao mover:** o jogo escolhe os bens (menor valor acima de 2 moedas); no jogo físico o jogador escolhe.
@@ -234,13 +252,14 @@ Registrados ao fim de cada fase; riscar quando resolvidos.
 - **(Fase 7) Validação visual:** a rodada com oponentes foi validada por testes, mas a tela não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 8) Tela de resultado simples:** é um `JOptionPane` com tabela HTML; rever o visual na Fase 9.
 - **(Fase 8) Cadeias na rodada final:** o humano passa por todos os estabelecimentos com cadeia, um de cada vez (inclusive os que já usaram a cadeia ao produzir); o bot usa todas até acabar os itens.
-- **(Fase 8) Empate total:** se total e sobra empatam, o resultado mostra "Empate!" (vitória compartilhada). Conferir com o manual.
+- ~~**(Fase 8) Empate total:** se total e sobra empatam, o resultado mostra "Empate!" (vitória compartilhada). Conferir com o manual.~~ Conferido: o manual desempata pelas moedas restantes e não fala de empate nelas; a vitória compartilhada fica.
 - **(Fase 8) Validação visual:** a partida completa chega ao fim nos testes, mas a tela de resultado não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 9) Contador no título:** a faixa de cima da mesa é ocupada pela barra de status e as cartas começam logo abaixo, então moedas/pontos/cartas aparecem no título da janela, não na mesa.
 - **(Fase 9) Badge de produção:** o estabelecimento da vez mostra "Atento: falta N" (vermelho se não dá para produzir), contando o mercado e as cartas selecionadas; substitui a etiqueta do trabalhador/assistente durante a produção.
 - **(Fase 9) Janela maior:** passou para 1280×760 (limitada à tela), o que alivia o espaço dos oponentes e assistentes com 3–4 jogadores, mas o layout não foi refeito; os pontos de atenção das Fases 2, 6 e 7 continuam abertos.
 - **(Fase 9) Itens não feitos:** oponentes ainda jogam de uma vez (Fase 7) e a tela de resultado continua sendo um `JOptionPane` (Fase 8).
 - **(Fase 9) Validação:** testes e `.jar` conferidos (o jar lê banco e imagens de dentro dele), mas a tela inicial, a ajuda e os badges não foram conferidos na tela pelo agente; conferir com `java -jar target/OhMyGoods.jar`.
+- **(Pós-Fase 9) Manual conferido:** com o manual em Markdown, também batem com o código: modo distraído, recursos da mão valendo para um só estabelecimento, mercado e guildas sem valer na cadeia, cadeias de todos os estabelecimentos na rodada final, Vidraçaria (11/12 recursos quaisquer) e troca de inicial a cada rodada. Seguem abertas as escolhas automáticas (exaustão, bens na cadeia e no pagamento), que no jogo físico são do jogador.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---
