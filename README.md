@@ -61,16 +61,20 @@ O `.jar` já inclui o banco de cartas, as imagens e o driver do SQLite; basta te
 | `R` | Na Fase I, troca a mão inteira (opcional) |
 | `C` | No planejamento, separa a carta selecionada para construir |
 | `K` | Usa a cadeia de produção do estabelecimento da vez |
-| `N` | Não produzir / não construir |
+| `N` | Não produzir / não construir / desistir de mover o assistente |
 | `H` | Ajuda com as regras resumidas |
 
-Clique nas cartas da mão para selecioná-las e nos estabelecimentos para alocar o trabalhador e os assistentes. A barra de status mostra a fase atual e as ações disponíveis; o título da janela mostra suas moedas em bens, pontos e cartas na mão.
+Clique nas cartas da mão para selecioná-las e nos estabelecimentos para alocar o trabalhador e os assistentes. Para pagar (construir, contratar ou mover um assistente), clique nos estabelecimentos cujos bens quer usar (botão direito tira um bem). Na cadeia, se o bem que falta está em mais de um estabelecimento, clique naquele de onde ele deve sair. Quando a pilha de compras e o descarte acabam, você escolhe na mão as cartas a descartar.
+
+A barra de status mostra a fase atual e as ações disponíveis (e, na vez dos oponentes, o que cada um fez); o título da janela mostra suas moedas em bens, pontos e cartas na mão. Passe o mouse sobre um oponente ou um assistente para ver o detalhe.
 
 O código está organizado em três camadas:
 
 - **Modelo:** `Card`, `Deck`, `Player`, `Building`, `Assistant`, `Worker`, `Market`, `Resource`, `GameState`
 - **Regras:** `Game`, `Production`, `Bot` (oponentes), `Scoring`, `Setup`
 - **Interface:** `MainWindow`, `StartScreen`, `Help`, `TablePanel`, `CardSprite`, `Zone`
+
+Capturas de tela sem abrir a janela (validação visual): `org.cardGames.Snapshots`, no escopo de teste, joga algumas partidas pela interface e salva PNGs numa pasta.
 
 As regras não dependem da interface, então podem ser testadas sem abrir a janela.
 

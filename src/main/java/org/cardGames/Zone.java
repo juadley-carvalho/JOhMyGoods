@@ -14,7 +14,7 @@ public enum Zone {
     /** Pilha de compras: cartas viradas para baixo, canto superior esquerdo. */
     DECK(false, true, 12) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
             pile(cards, SIDE, TOP);
         }
     },
@@ -22,7 +22,7 @@ public enum Zone {
     /** Pilha de descarte: canto superior direito. */
     DISCARD(false, false, 12) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
             pile(cards, width - CardSprite.WIDTH - SIDE - PILE_DEPTH, TOP);
         }
     },
@@ -30,7 +30,7 @@ public enum Zone {
     /** Mercado, 1ª fileira (fase II, Nascer do Sol). */
     MARKET_SUNRISE(false, false, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
             int margin = SIDE + CardSprite.WIDTH + PILE_GAP;
             centerRow(cards, TOP, margin, width - margin);
         }
@@ -39,9 +39,10 @@ public enum Zone {
     /** Mercado, 2ª fileira (fase III, Pôr do Sol). */
     MARKET_SUNSET(false, false, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
-            int margin = SIDE + CardSprite.WIDTH + PILE_GAP;
-            centerRow(cards, TOP + CardSprite.HEIGHT + 10, margin, width - margin);
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
+            // Ao lado dos oponentes (esquerda) e dos assistentes (direita): não pode invadir as colunas
+            int margin = Math.max(SIDE + CardSprite.WIDTH + PILE_GAP, SIDE_PANEL);
+            centerRow(cards, BELOW_PILES, margin, width - margin);
         }
     },
 
@@ -52,12 +53,13 @@ public enum Zone {
      */
     GOODS(false, true, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
             Map<Integer, List<CardSprite>> piles = new TreeMap<>();
             for (CardSprite card : cards) {
                 piles.computeIfAbsent(card.getGroup(), g -> new ArrayList<>()).add(card);
             }
-            piles.forEach((group, pile) -> pile(pile, buildingX(group), bottomRowY(height) - GOODS_PEEK));
+            int step = buildingStep(width, buildings, hand);
+            piles.forEach((group, pile) -> pile(pile, buildingX(group, step), bottomRowY(height) - GOODS_PEEK));
         }
 
         @Override
@@ -75,9 +77,10 @@ public enum Zone {
     /** Estabelecimentos construídos pelo jogador: canto inferior esquerdo. */
     BUILDINGS(false, false, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
+            int step = buildingStep(width, buildings, hand);
             for (int i = 0; i < cards.size(); i++) {
-                cards.get(i).setSlot(buildingX(i), bottomRowY(height));
+                cards.get(i).setSlot(buildingX(i, step), bottomRowY(height));
             }
         }
     },
@@ -85,9 +88,9 @@ public enum Zone {
     /** Carta escolhida para construir (Fase II): virada para baixo, logo à direita dos estabelecimentos. */
     PLANNED(false, true, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
             for (CardSprite card : cards) {
-                card.setSlot(buildingX(buildings), bottomRowY(height));
+                card.setSlot(buildingX(buildings, buildingStep(width, buildings, hand)), bottomRowY(height));
             }
         }
     },
@@ -98,21 +101,27 @@ public enum Zone {
      */
     OPPONENTS(false, true, 0) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
-            for (CardSprite card : cards) card.setSlot(SIDE, TOP + CardSprite.HEIGHT + 10);
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
+            for (CardSprite card : cards) card.setSlot(SIDE, BELOW_PILES);
         }
     },
 
     /** Mão do jogador: leque centralizado embaixo, à direita dos estabelecimentos e da carta a construir. Única área com cartas selecionáveis. */
     HAND(true, false, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
-            centerRow(cards, bottomRowY(height), buildingX(buildings + 1) - BUILDING_GAP + PILE_GAP, width - HAND_MARGIN);
+        public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
+            int planned = buildingX(buildings, buildingStep(width, buildings, hand));
+            centerRow(cards, bottomRowY(height), planned + CardSprite.WIDTH + PILE_GAP, width - HAND_MARGIN);
         }
     };
 
     private static final int SIDE = 50;
-    private static final int TOP = 30;
+    /** Onde começam as cartas: acima fica a barra de status (2 linhas). */
+    public static final int TOP = 46;
+    /** Logo abaixo das pilhas de compra e descarte: onde começam as colunas dos oponentes e dos assistentes. */
+    public static final int BELOW_PILES = TOP + CardSprite.HEIGHT + 10;
+    /** Largura reservada de cada lado da 2ª fileira do mercado para as colunas laterais. */
+    public static final int SIDE_PANEL = 370;
     private static final int PILE_GAP = 40;
     private static final int PILE_DEPTH = 16;       // espessura máxima visual de uma pilha
     private static final int MAX_SPACING = 40;
@@ -120,7 +129,9 @@ public enum Zone {
     private static final int HAND_BOTTOM_MARGIN = 20;
     private static final int GOODS_PEEK = 34;
     private static final int BUILDING_GAP = 10;      // espaço entre estabelecimentos lado a lado
-    private static final int PILE_VISIBLE = 12;      // cartas desenhadas em cada pilha de bens        // quanto da pilha de bens aparece acima do estabelecimento
+    private static final int PILE_VISIBLE = 12;      // cartas desenhadas em cada pilha de bens
+    private static final int MIN_BUILDING_STEP = 84; // com muitos estabelecimentos, eles se sobrepõem até aqui
+    private static final int HAND_MIN_SPACING = 24;  // espaço mínimo de cada carta da mão antes de espremer os estabelecimentos
 
     private final boolean selectable;
     private final boolean faceDown;
@@ -145,15 +156,29 @@ public enum Zone {
 
     /**
      * Define o "slot" (posição de repouso) de cada carta da área.
-     * buildings é o nº de estabelecimentos na mesa: as áreas de baixo se deslocam conforme ele cresce.
+     * buildings é o nº de estabelecimentos na mesa e hand o de cartas na mão: as áreas de baixo
+     * se deslocam (e os estabelecimentos se sobrepõem) conforme eles crescem.
      */
-    public abstract void layout(List<CardSprite> cards, int width, int height, int buildings);
+    public abstract void layout(List<CardSprite> cards, int width, int height, int buildings, int hand);
 
     // ------------------------------------------------------------------ helpers
 
-    /** Posição horizontal do i-ésimo estabelecimento. */
-    public static int buildingX(int i) {
-        return SIDE + i * (CardSprite.WIDTH + BUILDING_GAP);
+    /** Posição horizontal do i-ésimo estabelecimento, com step pixels entre um e o próximo. */
+    private static int buildingX(int i, int step) {
+        return SIDE + i * step;
+    }
+
+    /**
+     * Distância entre estabelecimentos vizinhos: lado a lado enquanto couber; senão eles se sobrepõem
+     * (até MIN_BUILDING_STEP) para a mão manter um espaço mínimo à direita. O espaço da carta a construir
+     * (logo depois do último estabelecimento) sempre fica reservado.
+     */
+    public static int buildingStep(int width, int buildings, int hand) {
+        int full = CardSprite.WIDTH + BUILDING_GAP;
+        if (buildings == 0) return full;
+        int handMin = CardSprite.WIDTH + HAND_MIN_SPACING * Math.max(hand - 1, 0);
+        int room = width - HAND_MARGIN - handMin - PILE_GAP - CardSprite.WIDTH - SIDE;
+        return Math.max(MIN_BUILDING_STEP, Math.min(full, room / buildings));
     }
 
     private static int bottomRowY(int height) {

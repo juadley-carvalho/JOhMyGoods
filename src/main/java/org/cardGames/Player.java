@@ -149,13 +149,21 @@ public class Player {
      * Devolve as cartas movidas (vazio se não deu).
      */
     public List<Card> runChain(Building building, List<Card> offered) {
+        return runChain(building, offered, Map.of());
+    }
+
+    /**
+     * Como runChain, escolhendo de qual estabelecimento sai cada bem (sources: item da cadeia ->
+     * estabelecimento de origem). Itens sem escolha saem do primeiro estabelecimento que tem o bem.
+     */
+    public List<Card> runChain(Building building, List<Card> offered, Map<Resource, Building> sources) {
         if (!buildings.contains(building)) {
             throw new IllegalArgumentException(building.getCard().getName() + " não é do jogador");
         }
         if (!hand.containsAll(offered)) {
             throw new IllegalArgumentException("só cartas da mão podem ser usadas na cadeia");
         }
-        List<Card> items = Production.chainItems(this, building, offered);
+        List<Card> items = Production.chainItems(this, building, offered, sources);
         for (Card card : items) {
             if (!hand.remove(card)) {
                 buildings.stream().filter(b -> b.removeGood(card)).findFirst();
@@ -344,9 +352,23 @@ public class Player {
         return (int) buildings.stream().filter(b -> b.getCard().isCardGuild()).count();
     }
 
-    /** Regra de exaustão: descarta metade da mão (arredondada para baixo). Devolve as cartas descartadas. */
+    /** Quantas cartas a regra de exaustão manda descartar: metade da mão, arredondada para baixo. */
+    public int exhaustionDiscards() {
+        return hand.size() / 2;
+    }
+
+    /** Regra de exaustão escolhida pelo jogo (oponentes): descarta a 1ª metade da mão. Devolve as cartas descartadas. */
     public List<Card> discardHalf() {
-        List<Card> discarded = new ArrayList<>(hand.subList(0, hand.size() / 2));
+        return discardChosen(hand.subList(0, exhaustionDiscards()));
+    }
+
+    /** Regra de exaustão com as cartas escolhidas pelo jogador: exatamente metade da mão, todas dela. */
+    public List<Card> discardChosen(List<Card> chosen) {
+        List<Card> discarded = List.copyOf(chosen);
+        if (discarded.size() != exhaustionDiscards() || !hand.containsAll(discarded)
+                || discarded.stream().distinct().count() != discarded.size()) {
+            throw new IllegalArgumentException("descarte metade da mão: " + exhaustionDiscards() + " cartas");
+        }
         hand.removeAll(discarded);
         return discarded;
     }

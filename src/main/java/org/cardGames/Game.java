@@ -1,5 +1,7 @@
 package org.cardGames;
 
+import java.awt.SecondaryLoop;
+import java.awt.Toolkit;
 import java.util.List;
 
 /**
@@ -10,19 +12,21 @@ import java.util.List;
  */
 public class Game {
 
-    private enum Phase {
+    enum Phase {
         NEW_HAND("Fase I - Nova mão de cartas", "R: trocar a mão inteira (opcional)   |   ESPAÇO: receber 2 cartas"),
         SUNRISE("Fase II - Nascer do Sol", "ESPAÇO: abrir o mercado até aparecerem 2 meios sóis"),
         PLAN("Fase II - Planejamento", "clique num estabelecimento: trabalhador (de novo: atento/distraído)   |   "
                 + "clique num assistente e depois num estabelecimento livre: mover (2 moedas)   |   "
                 + "C: construir a carta selecionada   |   ESPAÇO: continuar"),
+        MOVE("Fase II - Mover assistente", "clique nos estabelecimentos para pagar com os bens deles "
+                + "(botão direito: tirar)   |   ESPAÇO: pagar e mover   |   N: desistir"),
         SUNSET("Fase III - Pôr do Sol", "ESPAÇO: abrir a 2ª fileira do mercado"),
         PRODUCE("Fase IV - Produzir", "selecione cartas da mão para completar os recursos   |   "
                 + "ESPAÇO: produzir   |   N: não produzir"),
         CHAIN("Fase IV - Cadeia de produção", "selecione cartas da mão (bens de outros estabelecimentos "
                 + "entram sozinhos)   |   K: usar a cadeia   |   ESPAÇO: terminar"),
-        BUILD("Fase IV - Construir ou contratar", "clique nos estabelecimentos para escolher os bens do pagamento   |   "
-                + "clique num assistente para contratá-lo em vez de construir   |   "
+        BUILD("Fase IV - Construir ou contratar", "clique nos estabelecimentos para pagar com os bens deles "
+                + "(botão direito: tirar)   |   clique num assistente para contratá-lo em vez de construir   |   "
                 + "ESPAÇO: pagar e encerrar a rodada   |   N: nada"),
         PLACE_ASSISTANT("Fase IV - Alocar assistente", "clique num estabelecimento livre para o novo assistente   |   "
                 + "N: voltar"),
@@ -38,6 +42,7 @@ public class Game {
     }
 
     private static final int STEP_MS = 120; // intervalo entre uma carta e a próxima
+    private static final int BOT_PAUSE_MS = 700; // pausa depois de cada passo de um oponente
     private static final java.awt.Color ATTENTIVE_COLOR = new java.awt.Color(0x2E7D32);
     private static final java.awt.Color DISTRACTED_COLOR = new java.awt.Color(0xC75B12);
     private static final java.awt.Color PAYMENT_COLOR = new java.awt.Color(0x1565C0);
@@ -45,6 +50,7 @@ public class Game {
     private static final java.awt.Color HIREABLE_COLOR = new java.awt.Color(0x1B5E20);
     private static final java.awt.Color MISSING_COLOR = new java.awt.Color(0xB71C1C);
     private static final java.awt.Color UNAVAILABLE_COLOR = new java.awt.Color(0x555555);
+    private static final java.awt.Color SOURCE_COLOR = new java.awt.Color(0x00838F);
 
     private final GameState state;
     private final Deck deck;
@@ -55,13 +61,19 @@ public class Game {
     private Phase phase = Phase.NEW_HAND;
     private boolean handReplaced;
     private int clock; // atraso acumulado da ação em andamento: faz as cartas saírem uma de cada vez
+    private int stepStart; // quando começou o passo atual do oponente (a narração aparece nesse momento)
     private String warning; // aviso mostrado no lugar da dica até a próxima ação
-    private final java.util.Map<Building, Integer> payment = new java.util.LinkedHashMap<>(); // bens escolhidos para construir/contratar
+    private final java.util.Map<Building, Integer> payment = new java.util.LinkedHashMap<>(); // bens escolhidos para pagar
     private Assistant toHire;   // assistente escolhido na Fase IV (em vez de construir)
     private Assistant moving;   // assistente escolhido para mudar de estabelecimento na Fase II
+    private Building moveTarget; // para onde ele vai (Fase II, pagando)
     private final java.util.Deque<Building> producers = new java.util.ArrayDeque<>(); // fila da produção; o primeiro produz agora
+    private final java.util.Map<Resource, Building> chainSources = new java.util.EnumMap<>(Resource.class); // origem escolhida dos bens da cadeia
     private final java.util.Map<Player, String> lastTurn = new java.util.HashMap<>(); // resumo da última vez de cada oponente
     private boolean finalChains; // rodada final: as cadeias de todos os estabelecimentos já entraram na fila
+    private int discarding;     // exaustão: quantas cartas o humano precisa escolher para descartar (0 = nenhuma)
+    private SecondaryLoop exhaustionLoop; // segura a ação em andamento enquanto o humano escolhe
+    private boolean autoExhaustion; // capturas de tela: o jogo escolhe o descarte do humano também
     private java.util.function.Consumer<List<Scoring.Score>> onGameOver = ranking -> { };
     private java.util.function.Consumer<String> onInfo = info -> { };
 
@@ -79,6 +91,14 @@ public class Game {
             deck.discard(card);
             send(card, Zone.DISCARD);
         }
+
+        /** O passo aparece na barra de status quando as cartas dele começam a se mover; depois, uma pausa. */
+        @Override
+        public void step(String text) {
+            table.narrate("Fase IV - vez dos oponentes", text, stepStart);
+            clock = Math.max(clock, stepStart) + BOT_PAUSE_MS;
+            stepStart = clock;
+        }
     };
 
     public Game(GameState state, TablePanel table) {
@@ -88,24 +108,29 @@ public class Game {
         this.market = state.market();
         this.table = table;
         table.onCardClick(this::isClickable, this::click);
+        table.onCardRightClick(this::rightClick);
         table.onTileClick(this::isTileClickable, this::clickTile);
         table.onSelectionChange(this::updateStatus);
     }
 
     /**
-     * Mostra na mesa a preparação já feita pelo Setup: a Carvoaria no lugar, e os carvões
+     * Mostra na mesa a preparação já feita pelo Setup: os estabelecimentos (a Carvoaria) no lugar, e os bens
      * e a mão inicial saindo da pilha de compras, uma carta de cada vez.
      */
     public void start() {
-        Building charcoal = player.getCharcoalBurner();
-        table.addCard(charcoal.getCard(), Zone.BUILDINGS);
+        for (Building building : player.getBuildings()) {
+            table.addCard(building.getCard(), Zone.BUILDINGS);
+        }
 
         // As cartas já compradas no Setup partem do topo da pilha, como se fossem compradas agora
         for (Card card : deck.getDrawPile()) {
             table.addCard(card, Zone.DECK);
         }
-        for (Card card : charcoal.getGoods()) {
-            table.addCard(card, Zone.DECK);
+        for (Card card : deck.getDiscardPile()) {
+            table.addCard(card, Zone.DISCARD);
+        }
+        for (Building building : player.getBuildings()) {
+            for (Card card : building.getGoods()) table.addCard(card, Zone.DECK);
         }
         for (Card card : player.getHand()) {
             table.addCard(card, Zone.DECK);
@@ -144,6 +169,12 @@ public class Game {
 
     public GameState getState() { return state; }
 
+    /** Etapa atual da rodada (usado pelas capturas de tela). */
+    Phase phase() { return phase; }
+
+    /** Capturas de tela: na exaustão, o jogo escolhe o descarte do humano (sem esperar a tela). */
+    void setAutoExhaustion(boolean auto) { this.autoExhaustion = auto; }
+
     /** Chamado (com a classificação) quando o jogador pede o resultado ao fim da partida. */
     public void onGameOver(java.util.function.Consumer<List<Scoring.Score>> listener) {
         this.onGameOver = listener;
@@ -156,6 +187,10 @@ public class Game {
 
     /** Avança para a próxima etapa da rodada. */
     public void advance() {
+        if (discarding > 0) {
+            confirmDiscard();
+            return;
+        }
         if (table.isBusy()) return; // espera as cartas terminarem de se mover
         clock = 0;
 
@@ -181,7 +216,12 @@ public class Game {
                     Bot.plan(opponent, market);
                     lastTurn.remove(opponent);
                 }
+                moving = null;
                 phase = Phase.SUNSET;
+            }
+            case MOVE -> {
+                if (!confirmMove()) return;
+                phase = Phase.PLAN;
             }
             case SUNSET -> {
                 openMarketRow(Zone.MARKET_SUNSET);
@@ -224,7 +264,7 @@ public class Game {
 
     /** Fase I: descarta TODA a mão (não algumas) e compra a mesma quantidade. */
     public void replaceHand() {
-        if (table.isBusy() || phase != Phase.NEW_HAND || handReplaced) return;
+        if (discarding > 0 || table.isBusy() || phase != Phase.NEW_HAND || handReplaced) return;
         clock = 0;
         handReplaced = true;
 
@@ -239,12 +279,14 @@ public class Game {
         updateStatus();
     }
 
-    /** Tecla N, Fase IV: abre mão de produzir ou de construir nesta rodada. */
+    /** Tecla N: abre mão de produzir, de construir, de mover o assistente ou volta da alocação. */
     public void decline() {
-        if (table.isBusy()) return;
+        if (discarding > 0 || table.isBusy()) return;
         clock = 0;
         if (phase == Phase.PRODUCE) {
             nextProducer();
+        } else if (phase == Phase.MOVE) {
+            cancelMove();
         } else if (phase == Phase.PLACE_ASSISTANT) {
             phase = Phase.BUILD;
         } else if (phase == Phase.BUILD) {
@@ -253,13 +295,21 @@ public class Game {
         updateStatus();
     }
 
-    /** Cadeia de produção: executa uma vez com as cartas selecionadas na mão (pode repetir). */
+    /**
+     * Cadeia de produção: executa uma vez com as cartas selecionadas na mão (pode repetir).
+     * Se um bem que falta está em mais de um estabelecimento, o jogador escolhe antes de onde ele sai.
+     */
     public void runChain() {
-        if (table.isBusy() || phase != Phase.CHAIN) return;
+        if (discarding > 0 || table.isBusy() || phase != Phase.CHAIN) return;
         clock = 0;
         Building building = producers.peekFirst();
         List<Card> selected = player.getHand().stream().filter(Card::isSelected).toList();
-        List<Card> moved = player.runChain(building, selected);
+        Resource ask = ambiguousChainItem(building, selected);
+        if (ask != null) {
+            warn("há " + ask + " em mais de um estabelecimento - clique naquele de onde ele deve sair e use K de novo");
+            return;
+        }
+        List<Card> moved = player.runChain(building, selected, chainSources);
         if (moved.isEmpty()) {
             warn("a cadeia precisa de " + describeChain(building) + " - selecione na mão ou produza esses bens antes");
             return;
@@ -274,7 +324,7 @@ public class Game {
 
     /** Planejamento: separa a carta selecionada na mão para construir (virada para baixo). */
     public void planSelected() {
-        if (table.isBusy() || phase != Phase.PLAN) return;
+        if (discarding > 0 || table.isBusy() || phase != Phase.PLAN) return;
         clock = 0;
 
         List<Card> selected = player.getHand().stream().filter(Card::isSelected).toList();
@@ -292,12 +342,19 @@ public class Game {
     // ------------------------------------------------------------- internos
 
     private boolean isClickable(Card card) {
+        if (discarding > 0) return false;
         Building building = buildingOf(card);
         if (phase == Phase.BUILD) {
             return (player.getPlannedBuilding() != null || toHire != null) && building != null && building.goodsCount() > 0;
         }
+        if (phase == Phase.MOVE) {
+            return building != null && building.goodsCount() > 0;
+        }
         if (phase == Phase.PLACE_ASSISTANT) {
             return building != null && player.canPlaceAssistant(toHire, building);
+        }
+        if (phase == Phase.CHAIN) {
+            return building != null && isChainSourceChoice(building);
         }
         if (phase != Phase.PLAN) return false;
         if (card == player.getPlannedBuilding()) return true;
@@ -308,7 +365,7 @@ public class Game {
 
     /** Assistentes da lateral: clicáveis na construção (escolher quem contratar). */
     private boolean isTileClickable(int index) {
-        return phase == Phase.BUILD && index < state.availableAssistants().size();
+        return discarding == 0 && phase == Phase.BUILD && index < state.availableAssistants().size();
     }
 
     /** Construção: clicar num assistente o escolhe para contratar (de novo: desiste); a carta planejada fica de lado. */
@@ -344,19 +401,41 @@ public class Game {
         endRound();
     }
 
-    /** Fase II: muda o assistente escolhido para outro estabelecimento, pagando 2 moedas com os bens mais baratos. */
-    private void moveAssistant(Building target) {
-        java.util.Map<Building, Integer> cost = player.cheapestPayment(Player.MOVE_ASSISTANT_COST);
-        if (!player.canMoveAssistant(moving, target, cost)) {
+    /** Fase II: escolhido o destino do assistente, o jogador escolhe os bens para pagar as 2 moedas. */
+    private void startMove(Building target) {
+        int coins = player.getBuildings().stream().mapToInt(Building::goodsValue).sum();
+        if (coins < Player.MOVE_ASSISTANT_COST) {
             moving = null;
             warn("mover o assistente custa " + Player.MOVE_ASSISTANT_COST + " moedas em bens - não há bens suficientes");
             return;
         }
-        for (Card good : player.moveAssistant(moving, target, cost)) {
+        moveTarget = target;
+        payment.clear();
+        phase = Phase.MOVE;
+    }
+
+    /** Paga com os bens escolhidos e muda o assistente de estabelecimento; false (com aviso) se não cobre. */
+    private boolean confirmMove() {
+        if (!player.canMoveAssistant(moving, moveTarget, payment)) {
+            warn("o pagamento (" + Player.paymentValue(payment) + ") não cobre as " + Player.MOVE_ASSISTANT_COST
+                    + " moedas - escolha mais bens ou N: desistir");
+            return false;
+        }
+        for (Card good : player.moveAssistant(moving, moveTarget, payment)) {
             deck.discard(good);
             send(good, Zone.DISCARD);
         }
         moving = null;
+        moveTarget = null;
+        payment.clear();
+        return true;
+    }
+
+    private void cancelMove() {
+        moving = null;
+        moveTarget = null;
+        payment.clear();
+        phase = Phase.PLAN;
     }
 
     private String describeColors(Assistant assistant) {
@@ -374,9 +453,22 @@ public class Game {
         };
     }
 
+    /** Cor da carta na mesa (quadradinhos das fichas de assistente). */
+    private static java.awt.Color chipColor(Color color) {
+        return switch (color) {
+            case AZUL_ESCURO -> new java.awt.Color(0x1E3A8A);
+            case AZUL_CLARO -> new java.awt.Color(0x4FC3F7);
+            case AMARELO -> new java.awt.Color(0xFBC02D);
+            case VERMELHO -> new java.awt.Color(0xD32F2F);
+            case VERDE -> new java.awt.Color(0x43A047);
+            case PRETO -> new java.awt.Color(0x111111);
+        };
+    }
+
     /** Passa para o próximo estabelecimento da fila de produção; no fim da fila, vai para a construção. */
     private void nextProducer() {
         producers.pollFirst();
+        chainSources.clear();
         if (producers.isEmpty() && player.areChainsUnlocked() && !finalChains) {
             // Rodada final: depois da produção, a cadeia de cada estabelecimento pode ser usada
             finalChains = true;
@@ -391,36 +483,70 @@ public class Game {
         }
     }
 
-    /** Planejamento: clicar num estabelecimento aloca o trabalhador (ou alterna o modo, se ele já está lá); clicar na carta a construir a devolve. */
+    /**
+     * Um item da cadeia que não vem das cartas selecionadas e está em mais de um estabelecimento,
+     * sem o jogador ter escolhido de qual deles sai; null se não há dúvida.
+     */
+    private Resource ambiguousChainItem(Building building, List<Card> selected) {
+        for (Resource item : Production.itemsFromGoods(building, selected)) {
+            List<Building> sources = Production.goodSources(player, building, item);
+            if (sources.size() > 1 && !sources.contains(chainSources.get(item))) return item;
+        }
+        return null;
+    }
+
+    /** Na cadeia, um estabelecimento é clicável se tem um bem da cadeia que também está em outro. */
+    private boolean isChainSourceChoice(Building building) {
+        Building producing = producers.peekFirst();
+        if (producing == null || building == producing) return false;
+        Resource product = building.getCard().getProduct();
+        return producing.getCard().getChainResources().contains(product)
+                && Production.goodSources(player, producing, product).size() > 1
+                && building.goodsCount() > 0;
+    }
+
+    /**
+     * Clique num estabelecimento: na construção e ao mover, escolhe bens do pagamento; na cadeia, a origem dos bens;
+     * no planejamento, aloca o trabalhador (ou alterna o modo, se ele já está lá) ou escolhe o assistente a mover;
+     * clicar na carta a construir a devolve.
+     */
     private void click(Card card) {
         clock = 0;
-        if (phase == Phase.BUILD) {
-            choosePayment(buildingOf(card));
+        Building building = buildingOf(card);
+        if (phase == Phase.BUILD || phase == Phase.MOVE) {
+            choosePayment(building, +1);
+            return;
+        }
+        if (phase == Phase.CHAIN) {
+            chainSources.put(building.getCard().getProduct(), building);
+            updateStatus();
             return;
         }
         if (phase == Phase.PLACE_ASSISTANT) {
-            placeHired(buildingOf(card));
+            placeHired(building);
             updateStatus();
             return;
         }
         if (card == player.getPlannedBuilding()) {
             player.cancelPlannedBuilding();
             send(card, Zone.HAND);
+        } else if (moving != null && building == player.getAssistantBuilding(moving)) {
+            moving = null; // clicou de novo no assistente: desiste de mover
+        } else if (moving != null && player.canPlaceAssistant(moving, building)) {
+            startMove(building);
+        } else if (building.getPerson() instanceof Assistant assistant) {
+            moving = assistant;
+        } else if (building == player.getWorkerBuilding()) {
+            player.getWorker().toggleMode();
         } else {
-            Building building = buildingOf(card);
-            if (moving != null && building == player.getAssistantBuilding(moving)) {
-                moving = null; // clicou de novo no assistente: desiste de mover
-            } else if (moving != null && player.canPlaceAssistant(moving, building)) {
-                moveAssistant(building);
-            } else if (building.getPerson() instanceof Assistant assistant) {
-                moving = assistant;
-            } else if (building == player.getWorkerBuilding()) {
-                player.getWorker().toggleMode();
-            } else {
-                player.placeWorker(building);
-            }
+            player.placeWorker(building);
         }
         updateStatus();
+    }
+
+    /** Botão direito: tira 1 bem do estabelecimento do pagamento. */
+    private void rightClick(Card card) {
+        if (phase == Phase.BUILD || phase == Phase.MOVE) choosePayment(buildingOf(card), -1);
     }
 
     /**
@@ -469,11 +595,24 @@ public class Game {
         return text.toString();
     }
 
-    /** Construção: cada clique põe mais 1 bem do estabelecimento no pagamento; passando do total, volta a 0. */
-    private void choosePayment(Building building) {
-        int n = payment.getOrDefault(building, 0) + 1;
-        if (n > building.goodsCount()) payment.remove(building); else payment.put(building, n);
+    /**
+     * Pagamento: o clique põe mais 1 bem do estabelecimento (passando do total, volta a 0);
+     * o botão direito tira 1.
+     */
+    private void choosePayment(Building building, int delta) {
+        int n = payment.getOrDefault(building, 0) + delta;
+        if (n > building.goodsCount()) n = 0;
+        if (n <= 0) payment.remove(building); else payment.put(building, n);
         updateStatus();
+    }
+
+    /** Valor do pagamento escolhido diante do custo (o que passar do custo se perde: não há troco). */
+    private String describePayment(int cost) {
+        int value = Player.paymentValue(payment);
+        String text = "pagamento " + value + " de " + cost;
+        if (value > cost) text += " (" + (value - cost) + " a mais: não há troco)";
+        else if (value < cost) text += " (faltam " + (cost - value) + ")";
+        return text;
     }
 
     /**
@@ -498,13 +637,14 @@ public class Game {
     /**
      * Fase IV dos oponentes, na ordem do turno: before=true joga os que vêm antes do humano
      * (a partir do jogador inicial), before=false os que vêm depois. Quem joga antes tem
-     * prioridade para contratar um assistente.
+     * prioridade para contratar um assistente. Cada passo deles aparece na barra de status, com uma pausa.
      */
     private void playOpponents(boolean before) {
         List<Player> order = state.turnOrder();
         int human = order.indexOf(player);
         List<Player> turn = before ? order.subList(0, human) : order.subList(human + 1, order.size());
         for (Player opponent : turn) {
+            stepStart = clock;
             lastTurn.put(opponent, Bot.playTurn(opponent, state, botTable));
         }
     }
@@ -522,15 +662,19 @@ public class Game {
         Card planned = player.cancelPlannedBuilding();
         if (planned != null) send(planned, Zone.HAND);
         payment.clear();
+        chainSources.clear();
         toHire = null;
         moving = null;
+        moveTarget = null;
         handReplaced = false;
         finalChains = false;
         phase = state.isGameOver() ? Phase.GAME_OVER : Phase.NEW_HAND;
     }
 
+    /** O estabelecimento do jogador de que a carta faz parte: a própria carta ou um bem sobre ele. */
     private Building buildingOf(Card card) {
-        return player.getBuildings().stream().filter(b -> b.getCard() == card).findFirst().orElse(null);
+        return player.getBuildings().stream()
+                .filter(b -> b.getCard() == card || b.getGoods().contains(card)).findFirst().orElse(null);
     }
 
     private void warn(String message) {
@@ -551,7 +695,7 @@ public class Game {
         int suns = 0;
         while (suns < 2) {
             Card card = draw();
-            if (card == null) break; // sem cartas (regra de esgotar as duas pilhas ainda não implementada)
+            if (card == null) break; // nem compras nem descarte, mesmo depois da exaustão
             if (row == Zone.MARKET_SUNRISE) market.addSunrise(card); else market.addSunset(card);
             send(card, row);
             if (card.isSun()) suns++;
@@ -569,15 +713,7 @@ public class Game {
 
     /** Compra do topo; se a pilha acabou, embaralha o descarte de volta antes (e mostra isso na mesa). */
     private Card draw() {
-        if (deck.isExhausted()) {
-            // Regra de exaustão: compras e descarte vazios -> cada jogador descarta metade da mão
-            for (Player p : state.players()) {
-                for (Card card : p.discardHalf()) {
-                    deck.discard(card);
-                    send(card, Zone.DISCARD);
-                }
-            }
-        }
+        if (deck.isExhausted()) exhaust();
         if (deck.needsReshuffle()) {
             for (Card card : deck.reshuffle()) {
                 send(card, Zone.DECK);
@@ -586,65 +722,146 @@ public class Game {
         return deck.draw();
     }
 
+    /**
+     * Regra de exaustão (compras e descarte vazios): cada jogador descarta metade da mão. Os oponentes
+     * descartam na hora; o humano escolhe as cartas na mesa e a ação em andamento espera (a tela continua
+     * respondendo, como numa janela modal) até ele confirmar com ESPAÇO.
+     */
+    private void exhaust() {
+        for (Player opponent : state.opponents()) {
+            for (Card card : opponent.discardHalf()) {
+                deck.discard(card);
+                send(card, Zone.DISCARD);
+            }
+        }
+        int count = player.exhaustionDiscards();
+        if (count == 0) return;
+        if (autoExhaustion) {
+            for (Card card : player.discardHalf()) {
+                deck.discard(card);
+                send(card, Zone.DISCARD);
+            }
+            return;
+        }
+        discarding = count;
+        table.clearSelection();
+        updateStatus();
+        exhaustionLoop = Toolkit.getDefaultToolkit().getSystemEventQueue().createSecondaryLoop();
+        exhaustionLoop.enter(); // volta quando confirmDiscard chamar exit()
+        exhaustionLoop = null;
+        clock = 0; // as cartas de antes já se moveram enquanto o jogador escolhia
+    }
+
+    /** ESPAÇO na exaustão: descarta as cartas selecionadas, se forem exatamente metade da mão. */
+    private void confirmDiscard() {
+        List<Card> chosen = player.getHand().stream().filter(Card::isSelected).toList();
+        if (chosen.size() != discarding) {
+            warn("selecione exatamente " + discarding + (discarding == 1 ? " carta" : " cartas") + " para descartar");
+            return;
+        }
+        clock = 0;
+        for (Card card : player.discardChosen(chosen)) {
+            deck.discard(card);
+            send(card, Zone.DISCARD);
+        }
+        discarding = 0;
+        updateStatus();
+        if (exhaustionLoop != null) exhaustionLoop.exit();
+    }
+
     private void send(Card card, Zone zone) {
         table.moveCard(card, zone, clock);
         clock += STEP_MS;
     }
 
+    /** Barra de status: 1ª linha com a etapa e o que está em jogo; 2ª com as teclas ou o aviso. */
     private void updateStatus() {
-        String hint = (warning != null) ? "ATENÇÃO: " + warning : phase.hint;
+        String context = null;
+        String hint = phase.hint;
         Building working = producers.peekFirst();
-        if (warning == null && phase == Phase.PRODUCE && working != null) {
-            String missing = describeMissing(working, List.of());
-            hint = working.getCard().getName() + " (" + describePerson(working) + "): "
-                    + (missing.isEmpty() ? "recursos completos no mercado" : "faltam " + missing)
-                    + "   |   " + hint;
-        }
-        if (warning == null && phase == Phase.PLAN && moving != null) {
-            hint = "mover " + moving + ": clique num estabelecimento livre (" + Player.MOVE_ASSISTANT_COST
-                    + " moedas)   |   " + hint;
-        }
-        if (warning == null && phase == Phase.CHAIN && working != null) {
-            hint = working.getCard().getName() + ": " + describeChain(working) + " -> "
-                    + working.getCard().getChainResources().size() + " " + working.getCard().getProduct()
-                    + "   |   " + hint;
-        }
         Card planned = player.getPlannedBuilding();
-        if (warning == null && phase == Phase.BUILD) {
-            String target = toHire != null ? "contratar " + toHire + ": custo " + toHire.getCost()
-                    : planned == null ? null : "construir " + planned.getName() + ": custo " + planned.getCost();
-            hint = (target == null ? "nenhuma carta planejada" : target + ", pagamento " + Player.paymentValue(payment))
-                    + "   |   " + hint;
+        List<Card> selected = player.getHand().stream().filter(Card::isSelected).toList();
+        switch (phase) {
+            case PRODUCE -> {
+                if (working != null) {
+                    String missing = describeMissing(working, List.of());
+                    context = working.getCard().getName() + " (" + describePerson(working) + "): "
+                            + (missing.isEmpty() ? "recursos completos no mercado" : "faltam " + missing);
+                }
+            }
+            case PLAN -> {
+                if (moving != null) {
+                    context = "mover " + moving + ": clique num estabelecimento livre (" + Player.MOVE_ASSISTANT_COST
+                            + " moedas)";
+                }
+            }
+            case MOVE -> context = "mover " + moving + " para " + moveTarget.getCard().getName() + ": "
+                    + describePayment(Player.MOVE_ASSISTANT_COST);
+            case CHAIN -> {
+                if (working != null) {
+                    context = working.getCard().getName() + ": " + describeChain(working) + " -> "
+                            + working.getCard().getChainResources().size() + " " + working.getCard().getProduct();
+                    Resource ask = ambiguousChainItem(working, selected);
+                    if (ask != null && warning == null) context += "   |   há " + ask + " em mais de um estabelecimento: clique no de onde ele sai";
+                }
+            }
+            case BUILD -> {
+                if (toHire != null) context = "contratar " + toHire + ": " + describePayment(toHire.getCost());
+                else if (planned != null) context = "construir " + planned.getName() + ": " + describePayment(planned.getCost());
+                else context = "nenhuma carta planejada";
+            }
+            default -> { }
         }
+        String title = phase.title;
+        if (discarding > 0) {
+            title = "Exaustão - compras e descarte acabaram: cada jogador descarta metade da mão";
+            context = "escolha " + discarding + (discarding == 1 ? " carta" : " cartas") + " (" + selected.size()
+                    + " selecionadas)";
+            hint = "clique nas cartas da mão para escolher   |   ESPAÇO: descartar";
+        }
+        boolean warned = warning != null;
+        if (warned) hint = "ATENÇÃO: " + warning;
         warning = null;
-        String starting = (state.isFinalRound() && !state.isGameOver() ? " (RODADA FINAL)" : "")
+        String flags = (state.isFinalRound() && !state.isGameOver() ? " (RODADA FINAL)" : "")
                 + (state.startingPlayer() == player ? " (você é o inicial)" : "");
-        table.setStatus(phase.title + starting + "   |   " + hint);
+        table.setStatus(title + flags + (context != null ? "   |   " + context : ""), hint, warned);
         refreshInfo();
-        refreshWorkerBadge();
+        refreshBadges();
         refreshAssistants();
         refreshOpponents();
     }
 
     /**
-     * Área dos oponentes: cartas na mão, assistentes, estabelecimentos com os bens (o do trabalhador
-     * com * se atento ou ~ se distraído, só depois do planejamento; +A com assistente) e o que fizeram na última vez.
+     * Área dos oponentes: na caixa, pontos, estabelecimentos, moedas em bens, mão, assistentes e o que fizeram
+     * na última vez; no detalhe (mouse), cada estabelecimento com os bens (o do trabalhador com * se atento ou
+     * ~ se distraído, só depois do planejamento; +A com assistente).
      */
     private void refreshOpponents() {
         List<TablePanel.OpponentView> views = new java.util.ArrayList<>();
-        boolean revealed = phase != Phase.NEW_HAND && phase != Phase.SUNRISE && phase != Phase.PLAN;
+        boolean revealed = phase != Phase.NEW_HAND && phase != Phase.SUNRISE && phase != Phase.PLAN && phase != Phase.MOVE;
         for (Player opponent : state.opponents()) {
+            Scoring.Score score = Scoring.score(opponent);
             List<String> lines = new java.util.ArrayList<>();
-            lines.add("mão: " + opponent.getHand().size() + "   assistentes: " + opponent.getAssistants().size()
-                    + (revealed && opponent.getPlannedBuilding() != null ? "   +1 a construir" : ""));
-            lines.add(String.join(", ", opponent.getBuildings().stream().map(b -> b.getCard().getName()
-                    + (revealed && b.getPerson() instanceof Worker w
-                        ? (w.getMode() == Worker.Mode.ATTENTIVE ? "*" : "~") : "")
-                    + (b.getPerson() instanceof Assistant ? "+A" : "")
-                    + " (" + b.goodsCount() + ")").toList()));
+            lines.add(score.total() + " pts · " + opponent.getBuildings().size() + " estab. · " + score.coins() + " moedas");
+            lines.add("mão " + opponent.getHand().size() + " · " + opponent.getAssistants().size() + " assist."
+                    + (revealed && opponent.getPlannedBuilding() != null ? " · +1 a construir" : ""));
             String last = lastTurn.get(opponent);
             if (last != null) lines.add("> " + last.substring(opponent.getName().length() + 2));
-            views.add(new TablePanel.OpponentView(opponent.getName(), opponent == state.startingPlayer(), lines));
+
+            List<String> detail = new java.util.ArrayList<>();
+            for (Building b : opponent.getBuildings()) {
+                detail.add(b.getCard().getName()
+                        + (revealed && b.getPerson() instanceof Worker w
+                            ? (w.getMode() == Worker.Mode.ATTENTIVE ? " *" : " ~") : "")
+                        + (b.getPerson() instanceof Assistant a ? " +" + a : "")
+                        + ": " + b.goodsCount() + (b.goodsCount() == 1 ? " bem" : " bens")
+                        + (b.goodsCount() > 0 ? " (" + b.goodsValue() + " moedas)" : ""));
+            }
+            detail.add("pontos: " + score.buildingPoints() + " estab. + " + score.assistantPoints() + " assist. + "
+                    + score.goodsPoints() + " bens");
+            if (last != null) detail.add("última vez: " + last.substring(opponent.getName().length() + 2));
+            detail.add("* atento   ~ distraído   + assistente");
+            views.add(new TablePanel.OpponentView(opponent.getName(), opponent == state.startingPlayer(), lines, detail));
         }
         table.setOpponents(views);
     }
@@ -663,16 +880,23 @@ public class Game {
     /** Assistentes disponíveis na lateral: verde se o jogador tem as cores, azul se escolhido para contratar. */
     private void refreshAssistants() {
         table.setTiles(state.availableAssistants().stream().map(a -> new TablePanel.Tile(
-                a + "  custo " + a.getCost() + "  " + a.getPoints() + " pts",
-                describeColors(a),
+                "#" + a.getNumber(),
+                "custo " + a.getCost() + " · " + a.getPoints() + " pts",
+                a + ": custo " + a.getCost() + ", " + a.getPoints() + " pontos; exige " + describeColors(a),
+                a.getRequiredColors().stream().map(Game::chipColor).toList(),
                 a == toHire ? PAYMENT_COLOR : player.hasColorsFor(a) ? HIREABLE_COLOR : UNAVAILABLE_COLOR)).toList());
     }
 
-    private void refreshWorkerBadge() {
+    /** Etiquetas sobre os estabelecimentos: assistentes, mudança, origem da cadeia, pagamento e trabalhador. */
+    private void refreshBadges() {
         table.clearBadges();
         for (Assistant assistant : player.getAssistants()) {
             Building at = player.getAssistantBuilding(assistant);
             if (at != null) table.setBadge(at.getCard(), (assistant == moving ? "Mover " : "") + assistant, ASSISTANT_COLOR);
+        }
+        if (phase == Phase.MOVE && moveTarget != null) table.setBadge(moveTarget.getCard(), "Destino", ASSISTANT_COLOR);
+        if (phase == Phase.CHAIN) {
+            chainSources.values().forEach(b -> { if (b.goodsCount() > 0) table.setBadge(b.getCard(), "Origem", SOURCE_COLOR); });
         }
         payment.forEach((b, n) -> table.setBadge(b.getCard(), "Pagar " + n + " (" + n * b.getCard().getGoodValue() + ")",
                 PAYMENT_COLOR));

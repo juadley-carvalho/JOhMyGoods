@@ -95,6 +95,39 @@ class RoundTest {
     }
 
     @Test
+    void oponenteContaCadaPassoDaVez() {
+        GameState state = newGame(2, 3);
+        Player bot = state.opponents().getFirst();
+        Deck deck = state.deck();
+        List<String> steps = new ArrayList<>();
+        Bot.Table table = new Bot.Table() {
+            @Override
+            public Card draw() {
+                if (deck.needsReshuffle()) deck.reshuffle();
+                return deck.draw();
+            }
+
+            @Override
+            public void discard(Card card) {
+                deck.discard(card);
+            }
+
+            @Override
+            public void step(String text) {
+                steps.add(text);
+            }
+        };
+        openRow(state, table, true);
+        Bot.plan(bot, state.market());
+        openRow(state, table, false);
+        Bot.playTurn(bot, state, table);
+
+        assertTrue(steps.size() >= 2, "produção e construção: " + steps);
+        assertTrue(steps.getFirst().startsWith(bot.getName() + " · CARVOARIA: "), steps.getFirst());
+        assertTrue(steps.getLast().startsWith(bot.getName() + " "), steps.getLast());
+    }
+
+    @Test
     void jogadorInicialAlternaACadaRodada() {
         GameState state = newGame(3, 1);
         List<Player> players = state.players();

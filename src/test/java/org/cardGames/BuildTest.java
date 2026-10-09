@@ -143,6 +143,25 @@ class BuildTest {
     }
 
     @Test
+    void exaustaoComAsCartasEscolhidas() {
+        List<Card> hand = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            Card card = take(c -> true);
+            player.receive(card);
+            hand.add(card);
+        }
+        assertEquals(2, player.exhaustionDiscards(), "metade de 5, arredondada para baixo");
+        Card outside = take(c -> true);
+        assertThrows(IllegalArgumentException.class, () -> player.discardChosen(List.of(hand.get(4))), "só 1 carta");
+        assertThrows(IllegalArgumentException.class, () -> player.discardChosen(List.of(hand.get(4), outside)), "fora da mão");
+        assertThrows(IllegalArgumentException.class, () -> player.discardChosen(List.of(hand.get(4), hand.get(4))), "repetida");
+        assertEquals(5, player.getHand().size(), "nada saiu nas tentativas inválidas");
+
+        assertEquals(List.of(hand.get(4), hand.get(1)), player.discardChosen(List.of(hand.get(4), hand.get(1))));
+        assertEquals(List.of(hand.get(0), hand.get(2), hand.get(3)), player.getHand());
+    }
+
+    @Test
     void baralhoExaurido() {
         Deck deck = new Deck(new ArrayList<>(cards));
         assertFalse(deck.isExhausted());

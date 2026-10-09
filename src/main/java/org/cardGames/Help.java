@@ -27,6 +27,12 @@ public final class Help {
             + "<h3>Teclas</h3><p><b>ESPAÇO</b> avançar &nbsp; <b>R</b> trocar a mão &nbsp; <b>C</b> construir a "
             + "selecionada &nbsp; <b>K</b> usar a cadeia &nbsp; <b>N</b> não produzir / não construir &nbsp; "
             + "<b>H</b> ajuda. Clique nas cartas da mão para selecioná-las.</p>"
-            + "<p>O título da janela mostra suas moedas em bens, pontos e cartas na mão.</p>"
+            + "<p><b>Pagar:</b> clique nos estabelecimentos cujos bens quer usar (cada clique, +1 bem; botão "
+            + "direito, -1). O que passar do custo se perde: não há troco.</p>"
+            + "<p><b>Cadeia:</b> se o bem que falta está em mais de um estabelecimento, clique naquele de onde "
+            + "ele deve sair. <b>Exaustão:</b> quando compras e descarte acabam, escolha na mão metade das "
+            + "cartas para descartar e aperte ESPAÇO.</p>"
+            + "<p>O título da janela mostra suas moedas em bens, pontos e cartas na mão. Passe o mouse sobre "
+            + "um oponente ou um assistente para ver o detalhe.</p>"
             + "</body></html>";
 }

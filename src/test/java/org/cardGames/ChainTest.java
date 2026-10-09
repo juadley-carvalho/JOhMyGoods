@@ -109,6 +109,39 @@ class ChainTest {
     }
 
     @Test
+    void couroEmDoisCurtumesOJogadorEscolheAOrigem() {
+        Building first = player.build(byName("CURTUME"));
+        Building second = player.build(byName("CURTUME"));
+        goods(first, 2);
+        goods(second, 2);
+        Building shoes = producing("SAPATARIA");
+
+        assertEquals(List.of(Resource.COURO), Production.itemsFromGoods(shoes, List.of()));
+        assertEquals(List.of(first, second), Production.goodSources(player, shoes, Resource.COURO));
+
+        Card fromSecond = second.getGoods().getLast();
+        assertEquals(List.of(fromSecond), player.runChain(shoes, List.of(), java.util.Map.of(Resource.COURO, second)));
+        assertEquals(2, first.goodsCount(), "o 1º Curtume não foi tocado");
+        assertEquals(1, second.goodsCount());
+
+        player.runChain(shoes, List.of(), java.util.Map.of(Resource.COURO, second));
+        assertEquals(List.of(first), Production.goodSources(player, shoes, Resource.COURO), "o 2º esvaziou");
+        assertEquals(1, player.runChain(shoes, List.of(), java.util.Map.of(Resource.COURO, second)).size(),
+                "sem bens na origem escolhida, sai de outro");
+        assertEquals(1, first.goodsCount());
+    }
+
+    @Test
+    void itensDaCadeiaCobertosPelaMaoNaoPrecisamDeOrigem() {
+        goods(charcoal, 1);
+        Building pottery = producing("OLARIA");
+        Card clay = hand(Resource.ARGILA);
+
+        assertEquals(List.of(Resource.CARVAO), Production.itemsFromGoods(pottery, List.of(clay)));
+        assertEquals(2, Production.itemsFromGoods(pottery, List.of()).size());
+    }
+
+    @Test
     void olariaPrecisaDeArgilaECarvaoJuntosEGera2Bens() {
         goods(charcoal, 2);
         Building pottery = producing("OLARIA");

@@ -20,6 +20,9 @@ public final class Bot {
 
         /** Descarta uma carta (recurso gasto, bem usado no pagamento). */
         void discard(Card card);
+
+        /** Um passo da vez do oponente acabou (ex.: "Jogador 2 · PADARIA: produziu 2 bens"), para mostrar na tela. */
+        default void step(String text) { }
     }
 
     // ------------------------------------------------------- Fase II: planejamento
@@ -81,35 +84,48 @@ public final class Bot {
         for (Building building : player.producingBuildings()) {
             Production.Result result = player.produce(building, market, List.copyOf(player.getHand()));
             result.usedCards().forEach(table::discard);
+            int goods = 0;
             for (int i = 0; i < result.goods(); i++) {
                 Card good = table.draw();
                 if (good == null) break;
                 building.addGood(good);
-                produced++;
+                goods++;
             }
-            if (result.succeeded()) produced += runChains(player, building);
+            produced += goods;
+            table.step(where(player, building) + (result.succeeded() ? "produziu " + goods(goods) : "não produziu"));
+            if (result.succeeded()) produced += runChains(player, building, table);
         }
         if (player.areChainsUnlocked()) { // rodada final: cadeias em todos os estabelecimentos
-            for (Building building : player.getBuildings()) produced += runChains(player, building);
+            for (Building building : player.getBuildings()) produced += runChains(player, building, table);
         }
         player.finishProduction();
 
         List<String> summary = new ArrayList<>();
-        summary.add(produced + (produced == 1 ? " bem" : " bens"));
+        summary.add(goods(produced));
         String built = build(player, table);
         if (built == null) built = hire(player, state, table);
         if (built != null) summary.add(built);
+        table.step(player.getName() + " " + (built != null ? built : "não construiu nem contratou"));
         player.cancelPlannedBuilding();
         return player.getName() + ": " + String.join(", ", summary);
     }
 
+    private static String where(Player player, Building building) {
+        return player.getName() + " · " + building.getCard().getName() + ": ";
+    }
+
+    private static String goods(int n) {
+        return n + (n == 1 ? " bem" : " bens");
+    }
+
     /** Executa a cadeia de produção enquanto houver itens; devolve quantos bens ela gerou. */
-    private static int runChains(Player player, Building building) {
+    private static int runChains(Player player, Building building, Table table) {
         int goods = 0;
         List<Card> moved;
         while (!(moved = player.runChain(building, List.copyOf(player.getHand()))).isEmpty()) {
             goods += moved.size();
         }
+        if (goods > 0) table.step(where(player, building) + "cadeia de produção, +" + goods(goods));
         return goods;
     }
 

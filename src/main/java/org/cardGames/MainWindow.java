@@ -7,19 +7,20 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
 public class MainWindow extends JFrame {
 
     private final Supplier<GameState> newGame;
+    private final TablePanel table = new TablePanel();
 
     public MainWindow(Supplier<GameState> newGame) {
         super("Oh My Goods!");
         this.newGame = newGame;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        TablePanel table = new TablePanel();
         // Área de jogo, sem contar a barra de título: maior com mais jogadores, limitada à tela
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         table.setPreferredSize(new Dimension(Math.min(1280, screen.width - 40), Math.min(760, screen.height - 100)));
@@ -47,36 +48,28 @@ public class MainWindow extends JFrame {
         JOptionPane.showMessageDialog(this, Help.TEXT, "Ajuda", JOptionPane.PLAIN_MESSAGE);
     }
 
-    /** Tela de resultado: detalhamento da pontuação e opção de nova partida. */
+    /** Tela de resultado, desenhada sobre a mesa: detalhamento da pontuação e opção de nova partida. */
     private void showResult(List<Scoring.Score> ranking) {
-        Object[] options = {"Nova partida", "Sair"};
-        int choice = JOptionPane.showOptionDialog(this, resultText(ranking), "Resultado",
-                JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
-        if (choice == 0) {
+        table.showResult(resultView(ranking), () -> {
             dispose();
             new MainWindow(newGame);
-        } else if (choice == 1) {
+        }, () -> {
             dispose();
             System.exit(0);
-        }
+        });
     }
 
-    static String resultText(List<Scoring.Score> ranking) {
-        StringBuilder text = new StringBuilder("<html><table cellpadding=4>"
-                + "<tr><th></th><th>Jogador</th><th>Estabel.</th><th>Assist.</th><th>Bens</th>"
-                + "<th>Total</th><th>Sobra</th></tr>");
+    /** Tabela do resultado: posição, jogador, pontos por categoria, total e moedas que sobraram (desempate). */
+    static TablePanel.ResultView resultView(List<Scoring.Score> ranking) {
+        List<List<String>> rows = new ArrayList<>();
         for (int i = 0; i < ranking.size(); i++) {
             Scoring.Score s = ranking.get(i);
-            text.append("<tr><td>").append(i + 1).append("º</td><td>").append(s.player().getName())
-                    .append("</td><td align=right>").append(s.buildingPoints())
-                    .append("</td><td align=right>").append(s.assistantPoints())
-                    .append("</td><td align=right>").append(s.goodsPoints()).append(" (").append(s.coins()).append(" moedas)")
-                    .append("</td><td align=right><b>").append(s.total())
-                    .append("</b></td><td align=right>").append(s.leftoverCoins()).append("</td></tr>");
+            rows.add(List.of((i + 1) + "º", s.player().getName(), String.valueOf(s.buildingPoints()),
+                    String.valueOf(s.assistantPoints()), s.goodsPoints() + " (" + s.coins() + " moedas)",
+                    String.valueOf(s.total()), String.valueOf(s.leftoverCoins())));
         }
         String winner = Scoring.isTie(ranking) ? "Empate!" : ranking.getFirst().player().getName() + " venceu!";
-        return text.append("</table><br><b>").append(winner)
-                .append("</b><br>Bens: 1 ponto a cada ").append(Scoring.COINS_PER_POINT)
-                .append(" moedas; desempate pela sobra.</html>").toString();
+        return new TablePanel.ResultView(List.of("", "Jogador", "Estabel.", "Assist.", "Bens", "Total", "Sobra"),
+                rows, winner, "Bens: 1 ponto a cada " + Scoring.COINS_PER_POINT + " moedas; desempate pela sobra.");
     }
 }

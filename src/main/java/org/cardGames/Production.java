@@ -88,13 +88,18 @@ public final class Production {
      * Cada carta devolvida vira 1 bem no estabelecimento (cadeia de 2 itens: 2 bens por vez).
      */
     public static List<Card> chainItems(Player owner, Building target, List<Card> offered) {
+        return chainItems(owner, target, offered, Map.of());
+    }
+
+    /** Como chainItems, tirando cada bem primeiro do estabelecimento escolhido em sources (item -> origem). */
+    public static List<Card> chainItems(Player owner, Building target, List<Card> offered, Map<Resource, Building> sources) {
         List<Resource> chain = target.getCard().getChainResources();
         if (chain.isEmpty() || !target.hasProducedThisRound() && !owner.areChainsUnlocked()) return List.of();
         List<Card> hand = new ArrayList<>(offered);
         List<Card> items = new ArrayList<>();
         for (Resource item : chain) {
             Card card = hand.stream().filter(c -> c.getResource() == item).findFirst()
-                    .orElseGet(() -> goodFrom(owner, target, item, items));
+                    .orElseGet(() -> goodFrom(owner, target, item, items, sources.get(item)));
             if (card == null) return List.of();
             hand.remove(card);
             items.add(card);
@@ -102,10 +107,28 @@ public final class Production {
         return List.copyOf(items);
     }
 
-    /** Um bem do item, em outro estabelecimento do dono, que ainda não foi escolhido. */
-    private static Card goodFrom(Player owner, Building target, Resource item, List<Card> taken) {
-        for (Building source : owner.getBuildings()) {
-            if (source == target || source.getCard().getProduct() != item) continue;
+    /** Itens da cadeia que as cartas oferecidas não cobrem: terão de sair dos bens de outros estabelecimentos. */
+    public static List<Resource> itemsFromGoods(Building target, List<Card> offered) {
+        List<Card> hand = new ArrayList<>(offered);
+        List<Resource> fromGoods = new ArrayList<>();
+        for (Resource item : target.getCard().getChainResources()) {
+            Card card = hand.stream().filter(c -> c.getResource() == item).findFirst().orElse(null);
+            if (card == null) fromGoods.add(item); else hand.remove(card);
+        }
+        return fromGoods;
+    }
+
+    /** Outros estabelecimentos do dono com bens do item: de onde a cadeia pode tirá-lo. */
+    public static List<Building> goodSources(Player owner, Building target, Resource item) {
+        return owner.getBuildings().stream()
+                .filter(b -> b != target && b.getCard().getProduct() == item && b.goodsCount() > 0).toList();
+    }
+
+    /** Um bem do item, em outro estabelecimento do dono (o preferido primeiro), que ainda não foi escolhido. */
+    private static Card goodFrom(Player owner, Building target, Resource item, List<Card> taken, Building preferred) {
+        List<Building> sources = new ArrayList<>(goodSources(owner, target, item));
+        if (sources.remove(preferred)) sources.addFirst(preferred);
+        for (Building source : sources) {
             for (Card good : source.getGoods().reversed()) {
                 if (!taken.contains(good)) return good;
             }

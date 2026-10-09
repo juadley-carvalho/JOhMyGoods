@@ -52,6 +52,7 @@ public class Deck {
     }
 
     public List<Card> getDrawPile() { return List.copyOf(drawPile); }
+    public List<Card> getDiscardPile() { return List.copyOf(discardPile); }
     public int drawPileSize() { return drawPile.size(); }
     public int discardSize() { return discardPile.size(); }
 }

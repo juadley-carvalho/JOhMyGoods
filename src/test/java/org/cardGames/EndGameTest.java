@@ -157,7 +157,10 @@ class EndGameTest {
         for (int i = 1; i < ranking.size(); i++) {
             assertTrue(ranking.get(i - 1).total() >= ranking.get(i).total());
         }
-        assertFalse(MainWindow.resultText(ranking).isBlank());
+        TablePanel.ResultView view = MainWindow.resultView(ranking);
+        assertEquals(players, view.rows().size());
+        assertEquals(view.header().size(), view.rows().getFirst().size());
+        assertFalse(view.winner().isBlank());
     }
 
     /** Rodada só com a IA, encerrada pelas regras de fim de partida (GameState.endRound). */

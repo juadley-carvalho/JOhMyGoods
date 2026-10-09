@@ -3,10 +3,12 @@ package org.cardGames;
 import javax.swing.AbstractAction;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -20,6 +22,7 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -38,6 +41,7 @@ import java.util.function.Predicate;
 public class TablePanel extends JPanel {
 
     private static final int TICK_MS = 16; // ~60 quadros/s
+    private static final int NARRATION_HOLD_MS = 900; // quanto a última narração fica na tela
 
     private final Map<Zone, List<CardSprite>> zones = new EnumMap<>(Zone.class);
     private final Map<Card, CardSprite> spriteByCard = new IdentityHashMap<>();
@@ -45,33 +49,70 @@ public class TablePanel extends JPanel {
     private final Map<Card, Badge> badges = new IdentityHashMap<>();
     private Predicate<Card> clickable = card -> false;
     private Consumer<Card> clickAction = card -> { };
-    private String status = "";
+    private Consumer<Card> rightClickAction = card -> { };
+    private String statusTitle = "";
+    private String statusHint = "";
+    private boolean statusWarning;
     private Runnable selectionListener = () -> { };
     private List<Tile> tiles = List.of();
     private IntPredicate tileClickable = i -> false;
     private IntConsumer tileAction = i -> { };
+    private Point mouse; // para o detalhe ao passar o mouse
+
+    private final List<Narration> narrations = new ArrayList<>();
+    private String narration;  // o que o oponente acabou de fazer (no lugar da dica)
+    private String narrationTitle; // etapa mostrada na 1ª linha enquanto há narração
+    private int narrationHoldMs;
+    private List<OpponentView> pendingOpponents; // resumo novo, mostrado só quando a narração acabar
+
+    private ResultView result; // tela de resultado sobre a mesa, ou null
+    private Runnable onPlayAgain = () -> { };
+    private Runnable onExit = () -> { };
 
     private List<OpponentView> opponents = List.of();
 
-    /** Resumo de um oponente na área da esquerda: nome (com destaque se é o inicial) e linhas de texto. */
-    public record OpponentView(String name, boolean starting, List<String> lines) { }
+    /**
+     * Resumo de um oponente na coluna da esquerda: nome (com destaque se é o inicial), poucas linhas
+     * na caixa e o detalhe (estabelecimentos, bens) mostrado ao passar o mouse.
+     */
+    public record OpponentView(String name, boolean starting, List<String> lines, List<String> detail) { }
 
     private static final int OPPONENT_X = 10;
     private static final int OPPONENT_WIDTH = 190;
-    private static final int OPPONENT_TOP = 30 + CardSprite.HEIGHT + 10; // logo abaixo da pilha de compras
+    private static final int OPPONENT_GAP = 6;
     private static final int LINE_HEIGHT = 13;
 
-    /** Ficha desenhada na lateral direita da mesa (ex.: assistente disponível para contratar). */
-    public record Tile(String title, String detail, Color color) { }
+    /** Ficha da lateral direita (assistente disponível): título, info à direita, cores exigidas e detalhe (ao passar o mouse). */
+    public record Tile(String title, String info, String detail, List<Color> chips, Color color) { }
 
+    private static final int TILE_COLUMNS = 2;
     private static final int TILE_WIDTH = 150;
-    private static final int TILE_HEIGHT = 40;
-    private static final int TILE_GAP = 4;
+    private static final int TILE_HEIGHT = 36;
+    private static final int TILE_PAD = 8;
+    private static final int TILE_GAP = 6;
     private static final int TILE_SIDE = 50;
-    private static final int TILE_TOP = 30 + CardSprite.HEIGHT + 10; // logo abaixo do descarte
+
+    /** Tela de resultado: cabeçalho e linhas da tabela, frase do vencedor e uma nota de rodapé. */
+    public record ResultView(List<String> header, List<List<String>> rows, String winner, String note) { }
+
+    private static final int[] RESULT_COLUMNS = {40, 150, 80, 70, 140, 60, 60};
+    private static final int RESULT_ROW = 28;
 
     /** Etiqueta desenhada sobre uma carta (ex.: o trabalhador alocado no estabelecimento). */
     private record Badge(String text, Color color) { }
+
+    /** Texto que aparece na barra de status depois de delayMs (passo de um oponente), com a etapa na 1ª linha. */
+    private static final class Narration {
+        final String title;
+        final String text;
+        int delayMs;
+
+        Narration(String title, String text, int delayMs) {
+            this.title = title;
+            this.text = text;
+            this.delayMs = delayMs;
+        }
+    }
 
     public TablePanel() {
         setBackground(new Color(0x2E5E3E));
@@ -87,19 +128,27 @@ public class TablePanel extends JPanel {
             }
         });
 
-        MouseAdapter mouse = new MouseAdapter() {
+        MouseAdapter mouseAdapter = new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                onPress(e.getPoint());
+                onPress(e.getPoint(), SwingUtilities.isRightMouseButton(e));
             }
 
             @Override
             public void mouseMoved(MouseEvent e) {
+                mouse = e.getPoint();
                 updateCursor(e.getPoint());
+                repaint();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                mouse = null;
+                repaint();
             }
         };
-        addMouseListener(mouse);
-        addMouseMotionListener(mouse);
+        addMouseListener(mouseAdapter);
+        addMouseMotionListener(mouseAdapter);
     }
 
     // ------------------------------------------------------------ API pública
@@ -128,7 +177,16 @@ public class TablePanel extends JPanel {
         layoutAll(true);
     }
 
-    /** True enquanto alguma carta está esperando ou se movendo. */
+    /** Desmarca as cartas selecionadas da mão (elas descem para o lugar). */
+    public void clearSelection() {
+        for (CardSprite sprite : zones.get(Zone.HAND)) {
+            sprite.getCard().setSelected(false);
+            sprite.refreshTarget();
+        }
+        startAnimation();
+    }
+
+    /** True enquanto alguma carta está esperando ou se movendo (ou uma narração está na tela). */
     public boolean isBusy() {
         return animationTimer.isRunning();
     }
@@ -143,6 +201,11 @@ public class TablePanel extends JPanel {
         this.clickAction = action;
     }
 
+    /** Clique com o botão direito numa carta clicável (ex.: tirar um bem do pagamento). */
+    public void onCardRightClick(Consumer<Card> action) {
+        this.rightClickAction = action;
+    }
+
     public void setBadge(Card card, String text, Color color) {
         badges.put(card, new Badge(text, color));
         repaint();
@@ -153,36 +216,67 @@ public class TablePanel extends JPanel {
         repaint();
     }
 
-    /** Fichas da lateral (assistentes), e quais respondem ao clique e o que fazer (recebe o índice). */
+    /** Fichas da lateral (assistentes). */
     public void setTiles(List<Tile> tiles) {
         this.tiles = List.copyOf(tiles);
         repaint();
     }
 
+    /** Resumo dos oponentes; durante a narração, o novo resumo espera ela acabar (para não adiantar o resultado). */
     public void setOpponents(List<OpponentView> opponents) {
-        this.opponents = List.copyOf(opponents);
+        if (isNarrating()) {
+            pendingOpponents = List.copyOf(opponents);
+        } else {
+            this.opponents = List.copyOf(opponents);
+        }
         repaint();
     }
 
+    private boolean isNarrating() {
+        return !narrations.isEmpty() || narrationHoldMs > 0;
+    }
+
+    /** A narração acabou: mostra o resumo dos oponentes que estava esperando. */
+    private void endNarration() {
+        narrations.clear();
+        narration = null;
+        narrationTitle = null;
+        narrationHoldMs = 0;
+        if (pendingOpponents != null) {
+            opponents = pendingOpponents;
+            pendingOpponents = null;
+        }
+    }
+
+    /** Quais fichas respondem ao clique e o que fazer (recebe o índice). */
     public void onTileClick(IntPredicate clickable, IntConsumer action) {
         this.tileClickable = clickable;
         this.tileAction = action;
     }
 
-    private Rectangle tileBounds(int i) {
-        return new Rectangle(getWidth() - TILE_SIDE - TILE_WIDTH, TILE_TOP + i * (TILE_HEIGHT + TILE_GAP),
-                TILE_WIDTH, TILE_HEIGHT);
+    /** Barra de status: a 1ª linha diz a etapa; a 2ª, o que fazer (em destaque se for um aviso). */
+    public void setStatus(String title, String hint, boolean warning) {
+        this.statusTitle = title;
+        this.statusHint = hint;
+        this.statusWarning = warning;
+        repaint();
     }
 
-    private int tileAt(Point p) {
-        for (int i = 0; i < tiles.size(); i++) {
-            if (tileBounds(i).contains(p)) return i;
-        }
-        return -1;
+    /**
+     * Mostra o texto na barra de status depois de delayMs (no lugar da dica, com title na 1ª linha),
+     * enquanto as cartas se movem: é como os passos dos oponentes aparecem um de cada vez.
+     * A mesa fica ocupada até a última narração ter ficado um tempo na tela.
+     */
+    public void narrate(String title, String text, int delayMs) {
+        narrations.add(new Narration(title, text, delayMs));
+        startAnimation();
     }
 
-    public void setStatus(String status) {
-        this.status = status;
+    /** Mostra a tela de resultado sobre a mesa, com os botões "Jogar de novo" e "Sair". */
+    public void showResult(ResultView view, Runnable playAgain, Runnable exit) {
+        this.result = view;
+        this.onPlayAgain = playAgain;
+        this.onExit = exit;
         repaint();
     }
 
@@ -203,13 +297,65 @@ public class TablePanel extends JPanel {
         });
     }
 
+    // ------------------------------------------------- capturas de tela (testes)
+
+    /** Termina na hora todas as animações (as cartas pulam para o destino). */
+    void finishAnimations() {
+        layoutAll(false);
+        endNarration();
+        animationTimer.stop();
+    }
+
+    /** Simula um clique perto da parte de baixo da carta. */
+    void press(Card card) {
+        Rectangle r = spriteByCard.get(card).getHitBounds();
+        onPress(new Point(r.x + 20, r.y + r.height - 20), false);
+    }
+
+    /** Simula um clique no ponto (x, y). */
+    void pressAt(int x, int y) {
+        onPress(new Point(x, y), false);
+    }
+
+    /** Avança a animação ms milissegundos de uma vez (para capturar a tela no meio dela). */
+    void advanceTime(int ms) {
+        for (int t = 0; t < ms && animationTimer.isRunning(); t += TICK_MS) tick();
+    }
+
+    /** A 2ª linha da barra de status (para as capturas). */
+    String statusHint() {
+        return statusHint;
+    }
+
+    /** Simula o mouse parado no ponto (x, y), para mostrar o detalhe. */
+    void hoverAt(int x, int y) {
+        mouse = new Point(x, y);
+    }
+
+    /** Área da i-ésima ficha de assistente (para as capturas). */
+    Rectangle tileArea(int i) {
+        return tileBounds(i);
+    }
+
+    /** Área da caixa do i-ésimo oponente (para as capturas). */
+    Rectangle opponentArea(int i) {
+        return opponentBounds().get(i);
+    }
+
+    /** Área do botão "Jogar de novo" (para as capturas). */
+    Rectangle playAgainArea() {
+        return resultButtons()[0];
+    }
+
     // ------------------------------------------------------------- internos
 
     /** Pede a cada área que recalcule as posições. Com animate=false, as cartas pulam direto ao destino. */
     private void layoutAll(boolean animate) {
+        int buildings = zones.get(Zone.BUILDINGS).size();
+        int hand = zones.get(Zone.HAND).size();
         for (Zone zone : Zone.values()) {
             List<CardSprite> cards = zones.get(zone);
-            zone.layout(cards, getWidth(), getHeight(), zones.get(Zone.BUILDINGS).size());
+            zone.layout(cards, getWidth(), getHeight(), buildings, hand);
             if (!animate) {
                 cards.forEach(CardSprite::snapToTarget);
             }
@@ -226,7 +372,7 @@ public class TablePanel extends JPanel {
         }
     }
 
-    /** Um quadro de animação. O timer se desliga sozinho quando nada mais se move. */
+    /** Um quadro de animação. O timer se desliga sozinho quando nada mais se move nem há narração pendente. */
     private void tick() {
         boolean moving = false;
         for (List<CardSprite> cards : zones.values()) {
@@ -234,8 +380,21 @@ public class TablePanel extends JPanel {
                 moving |= sprite.update(TICK_MS);
             }
         }
+        for (Iterator<Narration> it = narrations.iterator(); it.hasNext(); ) {
+            Narration n = it.next();
+            n.delayMs -= TICK_MS;
+            if (n.delayMs <= 0) {
+                narration = n.text;
+                narrationTitle = n.title;
+                narrationHoldMs = NARRATION_HOLD_MS;
+                it.remove();
+            }
+        }
+        if (narrationHoldMs > 0) narrationHoldMs -= TICK_MS;
+        moving |= isNarrating();
         repaint();
         if (!moving) {
+            endNarration();
             animationTimer.stop();
         }
     }
@@ -272,11 +431,17 @@ public class TablePanel extends JPanel {
         return null;
     }
 
-    private void onPress(Point p) {
+    private void onPress(Point p, boolean right) {
+        if (result != null) {
+            Rectangle[] buttons = resultButtons();
+            if (buttons[0].contains(p)) onPlayAgain.run();
+            else if (buttons[1].contains(p)) onExit.run();
+            return;
+        }
         if (isBusy()) return;
         int tile = tileAt(p);
         if (tile >= 0) {
-            if (tileClickable.test(tile)) tileAction.accept(tile);
+            if (!right && tileClickable.test(tile)) tileAction.accept(tile);
             return;
         }
         CardSprite sprite = topCardAt(p);
@@ -288,32 +453,39 @@ public class TablePanel extends JPanel {
             startAnimation();
             selectionListener.run();
         } else if (clickable.test(sprite.getCard())) {
-            clickAction.accept(sprite.getCard());
+            (right ? rightClickAction : clickAction).accept(sprite.getCard());
         }
     }
 
     private void updateCursor(Point p) {
-        CardSprite sprite = topCardAt(p);
-        int tile = tileAt(p);
-        boolean canClick = tile >= 0 ? tileClickable.test(tile)
-                : sprite != null && (sprite.getZone().isSelectable() || clickable.test(sprite.getCard()));
+        boolean canClick;
+        if (result != null) {
+            Rectangle[] buttons = resultButtons();
+            canClick = buttons[0].contains(p) || buttons[1].contains(p);
+        } else {
+            CardSprite sprite = topCardAt(p);
+            int tile = tileAt(p);
+            canClick = tile >= 0 ? tileClickable.test(tile)
+                    : sprite != null && (sprite.getZone().isSelectable() || clickable.test(sprite.getCard()));
+        }
         setCursor(Cursor.getPredefinedCursor(canClick ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
     }
 
-    /** Quantidade de bens, num selo sobre a faixa de cada pilha que aparece acima do estabelecimento. */
+    // ------------------------------------------------------------- desenho
+
+    /** Quantidade de bens, num selo no canto esquerdo da faixa de cada pilha (o direito pode ficar coberto). */
     private void drawGoodsCount(Graphics2D g) {
         Map<Integer, List<CardSprite>> piles = new TreeMap<>();
         for (CardSprite sprite : zones.get(Zone.GOODS)) {
             piles.computeIfAbsent(sprite.getGroup(), k -> new ArrayList<>()).add(sprite);
         }
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setFont(getFont().deriveFont(Font.BOLD, 14f));
         for (List<CardSprite> goods : piles.values()) {
             if (goods.getLast().isFlying()) continue;
             Rectangle top = goods.getLast().getHitBounds();
             String text = String.valueOf(goods.size());
             int size = 24;
-            int cx = top.x + top.width - size - 6;
+            int cx = top.x + 6;
             int cy = top.y + 5;
             g.setColor(new Color(0x222222));
             g.fillOval(cx, cy, size, size);
@@ -324,25 +496,62 @@ public class TablePanel extends JPanel {
         }
     }
 
-    /** Etiquetas numa faixa sobre a parte de baixo da carta. */
+    /**
+     * Largura visível de um estabelecimento: quando eles se sobrepõem, o próximo cobre a parte direita
+     * (o último só fica inteiro se não houver carta a construir ao lado).
+     */
+    private int visibleWidth(CardSprite sprite) {
+        List<CardSprite> buildings = zones.get(Zone.BUILDINGS);
+        int index = buildings.indexOf(sprite);
+        if (index < 0) return CardSprite.WIDTH;
+        boolean last = index == buildings.size() - 1 && zones.get(Zone.PLANNED).isEmpty();
+        int step = Zone.buildingStep(getWidth(), buildings.size(), zones.get(Zone.HAND).size());
+        return last ? CardSprite.WIDTH : Math.min(CardSprite.WIDTH, step);
+    }
+
+    /** Etiquetas numa faixa sobre a parte de baixo da carta; a fonte diminui se o texto não cabe. */
     private void drawBadges(Graphics2D g) {
-        g.setFont(getFont().deriveFont(Font.BOLD, 13f));
         badges.forEach((card, badge) -> {
             CardSprite sprite = spriteByCard.get(card);
             if (sprite == null || sprite.isFlying()) return;
             Rectangle r = sprite.getHitBounds();
+            int w = visibleWidth(sprite) - 10;
             int h = 24;
+            int x = r.x + 5;
             int y = r.y + r.height - h - 8;
+            float size = 13f;
+            g.setFont(getFont().deriveFont(Font.BOLD, size));
+            while (size > 9f && g.getFontMetrics().stringWidth(badge.text()) > w - 6) {
+                size -= 1f;
+                g.setFont(getFont().deriveFont(Font.BOLD, size));
+            }
             g.setColor(badge.color());
-            g.fillRoundRect(r.x + 6, y, r.width - 12, h, 10, 10);
+            g.fillRoundRect(x, y, w, h, 10, 10);
             g.setColor(Color.WHITE);
-            g.drawRoundRect(r.x + 6, y, r.width - 12, h, 10, 10);
-            int tw = g.getFontMetrics().stringWidth(badge.text());
-            g.drawString(badge.text(), r.x + (r.width - tw) / 2, y + 17);
+            g.drawRoundRect(x, y, w, h, 10, 10);
+            String text = ellipsize(g.getFontMetrics(), badge.text(), w - 6);
+            int tw = g.getFontMetrics().stringWidth(text);
+            g.drawString(text, x + (w - tw) / 2, y + 17);
         });
     }
 
-    /** Fichas da lateral: título em negrito e detalhe embaixo. */
+    /** Fichas em duas colunas, logo abaixo do descarte. */
+    private Rectangle tileBounds(int i) {
+        int left = getWidth() - TILE_SIDE - TILE_COLUMNS * TILE_WIDTH - (TILE_COLUMNS - 1) * TILE_GAP;
+        int col = i % TILE_COLUMNS;
+        int row = i / TILE_COLUMNS;
+        return new Rectangle(left + col * (TILE_WIDTH + TILE_GAP), Zone.BELOW_PILES + row * (TILE_HEIGHT + TILE_GAP),
+                TILE_WIDTH, TILE_HEIGHT);
+    }
+
+    private int tileAt(Point p) {
+        for (int i = 0; i < tiles.size(); i++) {
+            if (tileBounds(i).contains(p)) return i;
+        }
+        return -1;
+    }
+
+    /** Fichas da lateral: título em negrito, info alinhada à direita e as cores exigidas em quadradinhos. */
     private void drawTiles(Graphics2D g) {
         for (int i = 0; i < tiles.size(); i++) {
             Tile tile = tiles.get(i);
@@ -352,42 +561,210 @@ public class TablePanel extends JPanel {
             g.setColor(Color.WHITE);
             g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
             g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-            g.drawString(tile.title(), r.x + 8, r.y + 16);
+            g.drawString(tile.title(), r.x + TILE_PAD, r.y + 15);
             g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
-            g.drawString(tile.detail(), r.x + 8, r.y + 32);
+            int iw = g.getFontMetrics().stringWidth(tile.info());
+            g.drawString(tile.info(), r.x + r.width - TILE_PAD - iw, r.y + 15);
+            int cx = r.x + TILE_PAD;
+            for (Color chip : tile.chips()) {
+                g.setColor(chip);
+                g.fillRoundRect(cx, r.y + 21, 14, 9, 4, 4);
+                g.setColor(Color.WHITE);
+                g.drawRoundRect(cx, r.y + 21, 14, 9, 4, 4);
+                cx += 18;
+            }
         }
     }
 
-    /** Área dos oponentes: uma caixa por oponente, com as linhas quebradas na largura da caixa. */
-    private void drawOpponents(Graphics2D g) {
-        int y = OPPONENT_TOP;
+    private Font opponentFont() {
+        return getFont().deriveFont(Font.PLAIN, 11f);
+    }
+
+    /** Caixas dos oponentes, uma embaixo da outra, abaixo da pilha de compras. */
+    private List<Rectangle> opponentBounds() {
+        List<Rectangle> bounds = new ArrayList<>();
+        int y = Zone.BELOW_PILES;
         for (OpponentView view : opponents) {
-            g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
-            List<String> lines = new ArrayList<>();
-            for (String line : view.lines()) lines.addAll(wrap(g, line, OPPONENT_WIDTH - 12));
-            int h = 20 + lines.size() * LINE_HEIGHT + 4;
-            g.setColor(new Color(0, 0, 0, 90));
-            g.fillRoundRect(OPPONENT_X, y, OPPONENT_WIDTH, h, 10, 10);
-            g.setColor(view.starting() ? new Color(0xFFD54F) : Color.WHITE);
-            g.drawRoundRect(OPPONENT_X, y, OPPONENT_WIDTH, h, 10, 10);
-            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-            g.drawString(view.name() + (view.starting() ? "  (inicial)" : ""), OPPONENT_X + 6, y + 15);
-            g.setColor(Color.WHITE);
-            g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
-            for (int i = 0; i < lines.size(); i++) {
-                g.drawString(lines.get(i), OPPONENT_X + 6, y + 20 + (i + 1) * LINE_HEIGHT - 2);
-            }
-            y += h + 6;
+            int h = 20 + view.lines().size() * LINE_HEIGHT + 5;
+            bounds.add(new Rectangle(OPPONENT_X, y, OPPONENT_WIDTH, h));
+            y += h + OPPONENT_GAP;
         }
+        return bounds;
+    }
+
+    /** Caixas resumidas dos oponentes: cada linha é cortada na largura (o detalhe aparece ao passar o mouse). */
+    private void drawOpponents(Graphics2D g) {
+        List<Rectangle> bounds = opponentBounds();
+        for (int k = 0; k < opponents.size(); k++) {
+            OpponentView view = opponents.get(k);
+            Rectangle r = bounds.get(k);
+            g.setColor(new Color(0, 0, 0, 90));
+            g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+            g.setColor(view.starting() ? new Color(0xFFD54F) : Color.WHITE);
+            g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
+            g.drawString(view.name() + (view.starting() ? "  (inicial)" : ""), r.x + 6, r.y + 15);
+            g.setColor(Color.WHITE);
+            g.setFont(opponentFont());
+            for (int i = 0; i < view.lines().size(); i++) {
+                String line = ellipsize(g.getFontMetrics(), view.lines().get(i), r.width - 12);
+                g.drawString(line, r.x + 6, r.y + 20 + (i + 1) * LINE_HEIGHT - 2);
+            }
+        }
+    }
+
+    /** Detalhe do oponente ou da ficha sob o mouse, numa caixa ao lado. */
+    private void drawHover(Graphics2D g) {
+        if (mouse == null || result != null) return;
+        List<Rectangle> bounds = opponentBounds();
+        for (int k = 0; k < bounds.size(); k++) {
+            Rectangle r = bounds.get(k);
+            if (r.contains(mouse)) {
+                OpponentView view = opponents.get(k);
+                drawPopup(g, view.name(), view.detail(), r.x + r.width + 6, r.y, false);
+                return;
+            }
+        }
+        int tile = tileAt(mouse);
+        if (tile >= 0 && !tiles.get(tile).detail().isEmpty()) {
+            Rectangle r = tileBounds(tile);
+            drawPopup(g, tiles.get(tile).title(), List.of(tiles.get(tile).detail()), r.x - 6, r.y, true);
+        }
+    }
+
+    /** Caixa de detalhe com título e linhas (quebradas em até 340 px); alignRight: x é a borda direita. */
+    private void drawPopup(Graphics2D g, String title, List<String> text, int x, int y, boolean alignRight) {
+        g.setFont(opponentFont());
+        FontMetrics fm = g.getFontMetrics();
+        List<String> lines = new ArrayList<>();
+        for (String line : text) lines.addAll(wrap(fm, line, 340));
+        int w = 12 + Math.max(fm.stringWidth(title) + 20, lines.stream().mapToInt(fm::stringWidth).max().orElse(0));
+        int h = 20 + lines.size() * LINE_HEIGHT + 5;
+        int left = alignRight ? x - w : x;
+        int top = Math.min(y, getHeight() - h - 4);
+        g.setColor(new Color(20, 20, 20, 235));
+        g.fillRoundRect(left, top, w, h, 10, 10);
+        g.setColor(Color.WHITE);
+        g.drawRoundRect(left, top, w, h, 10, 10);
+        g.setFont(getFont().deriveFont(Font.BOLD, 12f));
+        g.drawString(title, left + 6, top + 15);
+        g.setFont(opponentFont());
+        for (int i = 0; i < lines.size(); i++) {
+            g.drawString(lines.get(i), left + 6, top + 20 + (i + 1) * LINE_HEIGHT - 2);
+        }
+    }
+
+    /** Barra de status em duas linhas; a 2ª mostra o aviso (amarelo) ou o passo do oponente (azul) quando há. */
+    private void drawStatus(Graphics2D g) {
+        int width = getWidth() - 40;
+        g.setColor(Color.WHITE);
+        g.setFont(getFont().deriveFont(Font.BOLD, 14f));
+        String title = narration != null ? narrationTitle : statusTitle;
+        g.drawString(ellipsize(g.getFontMetrics(), title, width), 20, 18);
+        String hint = statusHint;
+        if (narration != null) {
+            g.setColor(new Color(0x90CAF9));
+            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
+            hint = "> " + narration;
+        } else if (statusWarning) {
+            g.setColor(new Color(0xFFD54F));
+            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
+        } else {
+            g.setFont(getFont().deriveFont(Font.PLAIN, 12f));
+        }
+        g.drawString(ellipsize(g.getFontMetrics(), hint, width), 20, 37);
+    }
+
+    private Rectangle resultPanel() {
+        int width = 0;
+        for (int c : RESULT_COLUMNS) width += c;
+        width += 40;
+        int height = 60 + RESULT_ROW * (result.rows().size() + 1) + 70 + 60;
+        return new Rectangle((getWidth() - width) / 2, (getHeight() - height) / 2, width, height);
+    }
+
+    /** Botões "Jogar de novo" e "Sair", no pé da tela de resultado. */
+    private Rectangle[] resultButtons() {
+        if (result == null) return new Rectangle[]{new Rectangle(), new Rectangle()};
+        Rectangle p = resultPanel();
+        int y = p.y + p.height - 55;
+        int again = 180;
+        int exit = 110;
+        int left = p.x + (p.width - again - exit - 20) / 2;
+        return new Rectangle[]{new Rectangle(left, y, again, 38), new Rectangle(left + again + 20, y, exit, 38)};
+    }
+
+    /** Tela de resultado: a mesa escurece e a tabela de pontos aparece no meio, com os botões. */
+    private void drawResult(Graphics2D g) {
+        if (result == null) return;
+        g.setColor(new Color(0, 0, 0, 160));
+        g.fillRect(0, 0, getWidth(), getHeight());
+        Rectangle p = resultPanel();
+        g.setColor(new Color(0x1F3A2A));
+        g.fillRoundRect(p.x, p.y, p.width, p.height, 16, 16);
+        g.setColor(new Color(0xFFD54F));
+        g.drawRoundRect(p.x, p.y, p.width, p.height, 16, 16);
+        g.setFont(getFont().deriveFont(Font.BOLD, 22f));
+        g.drawString("Resultado", p.x + 20, p.y + 36);
+
+        int y = p.y + 60;
+        drawResultRow(g, result.header(), p.x + 20, y, true);
+        for (List<String> row : result.rows()) {
+            y += RESULT_ROW;
+            drawResultRow(g, row, p.x + 20, y, false);
+        }
+        y += RESULT_ROW + 30;
+        g.setColor(new Color(0xFFD54F));
+        g.setFont(getFont().deriveFont(Font.BOLD, 18f));
+        g.drawString(result.winner(), p.x + 20, y);
+        g.setColor(Color.WHITE);
+        g.setFont(getFont().deriveFont(Font.PLAIN, 12f));
+        g.drawString(result.note(), p.x + 20, y + 22);
+
+        Rectangle[] buttons = resultButtons();
+        String[] labels = {"Jogar de novo", "Sair"};
+        for (int i = 0; i < buttons.length; i++) {
+            Rectangle b = buttons[i];
+            boolean hover = mouse != null && b.contains(mouse);
+            g.setColor(i == 0 ? new Color(hover ? 0x2E7D32 : 0x1B5E20) : new Color(hover ? 0x666666 : 0x444444));
+            g.fillRoundRect(b.x, b.y, b.width, b.height, 10, 10);
+            g.setColor(Color.WHITE);
+            g.drawRoundRect(b.x, b.y, b.width, b.height, 10, 10);
+            g.setFont(getFont().deriveFont(Font.BOLD, 14f));
+            int tw = g.getFontMetrics().stringWidth(labels[i]);
+            g.drawString(labels[i], b.x + (b.width - tw) / 2, b.y + 24);
+        }
+    }
+
+    /** Uma linha da tabela de resultado; as colunas de número (da 3ª em diante) ficam à direita. */
+    private void drawResultRow(Graphics2D g, List<String> cells, int x, int y, boolean header) {
+        g.setColor(header ? new Color(0xC8E6C9) : Color.WHITE);
+        g.setFont(getFont().deriveFont(header ? Font.BOLD : Font.PLAIN, 13f));
+        int cx = x;
+        for (int c = 0; c < cells.size() && c < RESULT_COLUMNS.length; c++) {
+            String text = ellipsize(g.getFontMetrics(), cells.get(c), RESULT_COLUMNS[c] - 8);
+            int tw = g.getFontMetrics().stringWidth(text);
+            g.drawString(text, c >= 2 ? cx + RESULT_COLUMNS[c] - 8 - tw : cx, y);
+            cx += RESULT_COLUMNS[c];
+        }
+    }
+
+    /** Corta o texto com "..." para caber em width pixels. */
+    private static String ellipsize(FontMetrics fm, String text, int width) {
+        if (fm.stringWidth(text) <= width) return text;
+        String end = "...";
+        int n = text.length();
+        while (n > 0 && fm.stringWidth(text.substring(0, n) + end) > width) n--;
+        return text.substring(0, n) + end;
     }
 
     /** Quebra o texto em linhas que caibam em width pixels (separando por espaços). */
-    private static List<String> wrap(Graphics2D g, String text, int width) {
+    private static List<String> wrap(FontMetrics fm, String text, int width) {
         List<String> lines = new ArrayList<>();
         StringBuilder line = new StringBuilder();
         for (String word : text.split(" ")) {
             String candidate = line.isEmpty() ? word : line + " " + word;
-            if (!line.isEmpty() && g.getFontMetrics().stringWidth(candidate) > width) {
+            if (!line.isEmpty() && fm.stringWidth(candidate) > width) {
                 lines.add(line.toString());
                 line = new StringBuilder(word);
             } else {
@@ -405,14 +782,15 @@ public class TablePanel extends JPanel {
         for (CardSprite sprite : paintOrder()) {
             sprite.draw(g2);
         }
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         drawGoodsCount(g2);
         drawBadges(g2);
         drawTiles(g2);
         drawOpponents(g2);
-        g2.setColor(Color.WHITE);
-        g2.setFont(getFont().deriveFont(Font.BOLD, 14f));
-        g2.drawString(status, 20, 20);
+        drawStatus(g2);
+        drawHover(g2);
+        drawResult(g2);
         g2.dispose();
     }
 }
