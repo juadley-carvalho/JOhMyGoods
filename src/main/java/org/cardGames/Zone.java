@@ -1,6 +1,9 @@
 package org.cardGames;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Áreas da mesa onde uma carta pode estar. Cada área sabe organizar as próprias cartas
@@ -11,7 +14,7 @@ public enum Zone {
     /** Pilha de compras: cartas viradas para baixo, canto superior esquerdo. */
     DECK(false, true, 12) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
             pile(cards, SIDE, TOP);
         }
     },
@@ -19,7 +22,7 @@ public enum Zone {
     /** Pilha de descarte: canto superior direito. */
     DISCARD(false, false, 12) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
             pile(cards, width - CardSprite.WIDTH - SIDE - PILE_DEPTH, TOP);
         }
     },
@@ -27,7 +30,7 @@ public enum Zone {
     /** Mercado, 1ª fileira (fase II, Nascer do Sol). */
     MARKET_SUNRISE(false, false, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
             int margin = SIDE + CardSprite.WIDTH + PILE_GAP;
             centerRow(cards, TOP, margin, width - margin);
         }
@@ -36,39 +39,64 @@ public enum Zone {
     /** Mercado, 2ª fileira (fase III, Pôr do Sol). */
     MARKET_SUNSET(false, false, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
             int margin = SIDE + CardSprite.WIDTH + PILE_GAP;
             centerRow(cards, TOP + CardSprite.HEIGHT + 10, margin, width - margin);
         }
     },
 
     /**
-     * Bens sobre os estabelecimentos do jogador: pilha virada para baixo, aparecendo
-     * por cima da Carvoaria (vem antes de BUILDINGS para ser desenhada atrás dela).
-     * Por enquanto só a Carvoaria tem bens; a Fase 2 separa uma pilha por estabelecimento.
+     * Bens sobre os estabelecimentos do jogador: uma pilha virada para baixo por estabelecimento
+     * (o grupo da carta é o índice do estabelecimento), aparecendo por cima dele
+     * (vem antes de BUILDINGS para ser desenhada atrás).
      */
-    GOODS(false, true, 12) {
+    GOODS(false, true, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height) {
-            pile(cards, SIDE, bottomRowY(height) - GOODS_PEEK);
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+            Map<Integer, List<CardSprite>> piles = new TreeMap<>();
+            for (CardSprite card : cards) {
+                piles.computeIfAbsent(card.getGroup(), g -> new ArrayList<>()).add(card);
+            }
+            piles.forEach((group, pile) -> pile(pile, buildingX(group), bottomRowY(height) - GOODS_PEEK));
+        }
+
+        @Override
+        public boolean isVisible(List<CardSprite> cards, int index) {
+            // Só as cartas do topo de cada pilha precisam ser desenhadas
+            int group = cards.get(index).getGroup();
+            int above = 0;
+            for (int i = index + 1; i < cards.size(); i++) {
+                if (cards.get(i).getGroup() == group) above++;
+            }
+            return above < PILE_VISIBLE;
         }
     },
 
     /** Estabelecimentos construídos pelo jogador: canto inferior esquerdo. */
     BUILDINGS(false, false, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height) {
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
             for (int i = 0; i < cards.size(); i++) {
-                cards.get(i).setSlot(SIDE + i * (CardSprite.WIDTH + 10), bottomRowY(height));
+                cards.get(i).setSlot(buildingX(i), bottomRowY(height));
             }
         }
     },
 
-    /** Mão do jogador: leque centralizado embaixo, à direita dos estabelecimentos. Única área com cartas clicáveis. */
+    /** Carta escolhida para construir (Fase II): virada para baixo, logo à direita dos estabelecimentos. */
+    PLANNED(false, true, Integer.MAX_VALUE) {
+        @Override
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+            for (CardSprite card : cards) {
+                card.setSlot(buildingX(buildings), bottomRowY(height));
+            }
+        }
+    },
+
+    /** Mão do jogador: leque centralizado embaixo, à direita dos estabelecimentos e da carta a construir. Única área com cartas selecionáveis. */
     HAND(true, false, Integer.MAX_VALUE) {
         @Override
-        public void layout(List<CardSprite> cards, int width, int height) {
-            centerRow(cards, bottomRowY(height), SIDE + CardSprite.WIDTH + PILE_GAP, width - HAND_MARGIN);
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+            centerRow(cards, bottomRowY(height), buildingX(buildings + 1) - BUILDING_GAP + PILE_GAP, width - HAND_MARGIN);
         }
     };
 
@@ -79,11 +107,13 @@ public enum Zone {
     private static final int MAX_SPACING = 40;
     private static final int HAND_MARGIN = 40;
     private static final int HAND_BOTTOM_MARGIN = 20;
-    private static final int GOODS_PEEK = 34;        // quanto da pilha de bens aparece acima do estabelecimento
+    private static final int GOODS_PEEK = 34;
+    private static final int BUILDING_GAP = 10;      // espaço entre estabelecimentos lado a lado
+    private static final int PILE_VISIBLE = 12;      // cartas desenhadas em cada pilha de bens        // quanto da pilha de bens aparece acima do estabelecimento
 
     private final boolean selectable;
     private final boolean faceDown;
-    private final int visibleLimit;
+    private final int visibleLimit; // quantas cartas do topo precisam ser desenhadas
 
     Zone(boolean selectable, boolean faceDown, int visibleLimit) {
         this.selectable = selectable;
@@ -97,13 +127,23 @@ public enum Zone {
     /** Se as cartas desta área ficam viradas para baixo. */
     public boolean isFaceDown() { return faceDown; }
 
-    /** Quantas cartas do topo precisam ser desenhadas (numa pilha de 100 cartas, só as últimas aparecem). */
-    public int getVisibleLimit() { return visibleLimit; }
+    /** Se a carta na posição index precisa ser desenhada (numa pilha grande, só o topo aparece). */
+    public boolean isVisible(List<CardSprite> cards, int index) {
+        return index >= cards.size() - visibleLimit;
+    }
 
-    /** Define o "slot" (posição de repouso) de cada carta da área. */
-    public abstract void layout(List<CardSprite> cards, int width, int height);
+    /**
+     * Define o "slot" (posição de repouso) de cada carta da área.
+     * buildings é o nº de estabelecimentos na mesa: as áreas de baixo se deslocam conforme ele cresce.
+     */
+    public abstract void layout(List<CardSprite> cards, int width, int height, int buildings);
 
     // ------------------------------------------------------------------ helpers
+
+    /** Posição horizontal do i-ésimo estabelecimento. */
+    public static int buildingX(int i) {
+        return SIDE + i * (CardSprite.WIDTH + BUILDING_GAP);
+    }
 
     private static int bottomRowY(int height) {
         return height - CardSprite.HEIGHT - HAND_BOTTOM_MARGIN;

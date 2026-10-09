@@ -56,5 +56,60 @@ public class Player {
 
     /** Carta escolhida na Fase II para construir (virada para baixo), ou null. */
     public Card getPlannedBuilding() { return plannedBuilding; }
-    public void setPlannedBuilding(Card card) { this.plannedBuilding = card; }
+
+    // ------------------------------------------------------- planejamento (Fase II)
+
+    /** Estabelecimento onde o trabalhador está, ou null. */
+    public Building getWorkerBuilding() {
+        return buildings.stream().filter(b -> b.getPerson() == worker).findFirst().orElse(null);
+    }
+
+    /** Se o estabelecimento pode receber o trabalhador: é do jogador, produz e não tem outra pessoa. */
+    public boolean canPlaceWorker(Building building) {
+        return buildings.contains(building)
+                && building.getCard().isProducer()
+                && (!building.isOccupied() || building.getPerson() == worker);
+    }
+
+    /** Coloca o trabalhador no estabelecimento, tirando-o de onde estava. */
+    public void placeWorker(Building building) {
+        if (!canPlaceWorker(building)) {
+            throw new IllegalStateException("o trabalhador não pode ir para " + building.getCard().getName());
+        }
+        removeWorker();
+        building.setPerson(worker);
+    }
+
+    public void removeWorker() {
+        Building current = getWorkerBuilding();
+        if (current != null) current.clearPerson();
+    }
+
+    /**
+     * Separa uma carta da mão para construir (fica virada para baixo).
+     * Se já havia outra escolhida, ela volta para a mão.
+     */
+    public void planBuilding(Card card) {
+        if (!hand.contains(card)) {
+            throw new IllegalArgumentException(card + " não está na mão");
+        }
+        cancelPlannedBuilding();
+        hand.remove(card);
+        plannedBuilding = card;
+    }
+
+    /** Devolve a carta a construir para a mão; retorna a carta devolvida, ou null. */
+    public Card cancelPlannedBuilding() {
+        Card card = plannedBuilding;
+        if (card != null) {
+            hand.add(card);
+            plannedBuilding = null;
+        }
+        return card;
+    }
+
+    /** O planejamento só termina com o trabalhador alocado (a construção é opcional). */
+    public boolean isPlanningComplete() {
+        return getWorkerBuilding() != null;
+    }
 }

@@ -19,6 +19,7 @@ public class MainWindow extends JFrame {
         Game game = new Game(state, table);
         table.onKey(KeyEvent.VK_SPACE, game::advance);
         table.onKey(KeyEvent.VK_R, game::replaceHand);
+        table.onKey(KeyEvent.VK_C, game::planSelected);
 
         pack();
         setLocationRelativeTo(null);

@@ -81,11 +81,13 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** o jogador decide onde trabalhar e o que construir, depois do Nascer do Sol.
 
-- [ ] Área de estabelecimentos do jogador na mesa (nova `Zone`), com uma pilha de bens por estabelecimento (hoje `Zone.GOODS` é uma pilha única).
-- [ ] Clicar em um estabelecimento para alocar o trabalhador; alternar **atento** (todos os recursos → 2 bens) / **distraído** (1 recurso a menos → 1 bem).
-- [ ] Escolher 1 carta da mão para construir (fica virada para baixo).
-- [ ] Mover assistente pagando 2 moedas (pode ficar para a Fase 6).
-- [ ] Bloquear avanço inválido (ex.: duas pessoas no mesmo estabelecimento).
+- [x] Área de estabelecimentos do jogador na mesa, com uma pilha de bens por estabelecimento (`Zone.GOODS` agrupa as cartas pelo índice do estabelecimento) e a mão deslocando-se conforme os estabelecimentos crescem.
+- [x] Clicar em um estabelecimento para alocar o trabalhador; clicar de novo alterna **atento** (todos os recursos → 2 bens) / **distraído** (1 recurso a menos → 1 bem). Etiqueta sobre a carta mostra o modo.
+- [x] Escolher 1 carta da mão para construir (selecionar + tecla **C**; fica virada para baixo em `Zone.PLANNED`; clicar nela devolve para a mão).
+- [ ] Mover assistente pagando 2 moedas — adiado para a Fase 6.
+- [x] Bloquear avanço inválido: não avança sem o trabalhador alocado; não aloca em guilda, em estabelecimento ocupado nem de outro jogador.
+
+**Fluxo da rodada:** Nova Mão → Nascer do Sol → **Planejamento** (nova etapa) → Pôr do Sol → Produzir. Regras em `Player` (`placeWorker`, `planBuilding`, ...), testadas em `PlanningTest`.
 
 **Validação:** é possível alocar, trocar o modo e escolher a construção; o estado aparece na tela e persiste até a Fase IV.
 
@@ -190,9 +192,13 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 Registrados ao fim de cada fase; riscar quando resolvidos.
 
-- **(Fase 1) Pilha única de bens:** `Zone.GOODS` mostra os bens de todos os estabelecimentos numa só pilha. Resolver na Fase 2.
+- ~~**(Fase 1) Pilha única de bens:** `Zone.GOODS` mostra os bens de todos os estabelecimentos numa só pilha. Resolver na Fase 2.~~ Resolvido na Fase 2.
 - **(Fase 1) Preparação não conferida no manual:** o PDF não pôde ser lido no ambiente de desenvolvimento; Carvoaria + 7 carvões, 5 cartas e 2 assistentes por jogador seguem este planejamento. Conferir com o manual (p. 2).
 - **(Fase 1) Imagens faltantes:** assistentes, trabalhador e verso da carta (o verso usa desenho provisório). Ver *Decisões em aberto*, item 2.
+- **(Fase 2) Fim de rodada provisório:** como produção e construção ainda não existem, ao encerrar a rodada o trabalhador sai e a carta planejada volta para a mão (`Game.endPlanning`). Substituir nas Fases 3 e 5.
+- **(Fase 2) Trabalhador obrigatório:** o avanço exige o trabalhador alocado; a construção é opcional. Conferir com o manual.
+- **(Fase 2) Largura da mesa:** com muitos estabelecimentos (até 8 + carta a construir) a fileira de baixo ocupa a largura toda e a mão fica espremida. Rever o layout (Fase 9 ou antes, se atrapalhar).
+- **(Fase 2) Validação visual:** a interface foi compilada e as regras testadas, mas a tela não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---

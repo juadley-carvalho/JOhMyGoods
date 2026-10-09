@@ -29,6 +29,7 @@ public class CardSprite {
     private final Card card;
     private final BufferedImage image;   // redimensionada uma única vez
     private Zone zone;
+    private int group;                   // subdivisão da área (ex.: índice do estabelecimento dono do bem)
 
     private double x, y;                 // posição atual (animada)
     private double targetX, targetY;     // para onde a carta está indo
@@ -103,6 +104,8 @@ public class CardSprite {
 
     public Card getCard() { return card; }
     public Zone getZone() { return zone; }
+    public int getGroup() { return group; }
+    public void setGroup(int group) { this.group = group; }
     public boolean isFlying() { return flying; }
 
     /** Troca de área. A carta espera delayMs antes de partir e é desenhada por cima das outras durante a viagem. */

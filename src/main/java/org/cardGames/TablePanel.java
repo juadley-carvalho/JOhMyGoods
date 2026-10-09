@@ -22,6 +22,9 @@ import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * A mesa inteira desenhada num único painel. Como todas as áreas (mão, mercado,
@@ -37,7 +40,13 @@ public class TablePanel extends JPanel {
     private final Map<Zone, List<CardSprite>> zones = new EnumMap<>(Zone.class);
     private final Map<Card, CardSprite> spriteByCard = new IdentityHashMap<>();
     private final Timer animationTimer = new Timer(TICK_MS, e -> tick());
+    private final Map<Card, Badge> badges = new IdentityHashMap<>();
+    private Predicate<Card> clickable = card -> false;
+    private Consumer<Card> clickAction = card -> { };
     private String status = "";
+
+    /** Etiqueta desenhada sobre uma carta (ex.: o trabalhador alocado no estabelecimento). */
+    private record Badge(String text, Color color) { }
 
     public TablePanel() {
         setBackground(new Color(0x2E5E3E));
@@ -80,7 +89,13 @@ public class TablePanel extends JPanel {
 
     /** Move uma carta para outra área com animação, começando depois de delayMs. */
     public void moveCard(Card card, Zone target, int delayMs) {
+        moveCard(card, target, 0, delayMs);
+    }
+
+    /** Como moveCard, indicando o grupo dentro da área (ex.: em qual estabelecimento fica o bem). */
+    public void moveCard(Card card, Zone target, int group, int delayMs) {
         CardSprite sprite = spriteByCard.get(card);
+        sprite.setGroup(group);
         zones.get(sprite.getZone()).remove(sprite);
         zones.get(target).add(sprite);
         sprite.getCard().setSelected(false); // seleção só faz sentido dentro da mão
@@ -95,6 +110,22 @@ public class TablePanel extends JPanel {
 
     public int count(Zone zone) {
         return zones.get(zone).size();
+    }
+
+    /** Cartas fora da mão que respondem ao clique (ex.: estabelecimentos na Fase II), e o que fazer com elas. */
+    public void onCardClick(Predicate<Card> clickable, Consumer<Card> action) {
+        this.clickable = clickable;
+        this.clickAction = action;
+    }
+
+    public void setBadge(Card card, String text, Color color) {
+        badges.put(card, new Badge(text, color));
+        repaint();
+    }
+
+    public void clearBadges() {
+        badges.clear();
+        repaint();
     }
 
     public void setStatus(String status) {
@@ -120,7 +151,7 @@ public class TablePanel extends JPanel {
     private void layoutAll(boolean animate) {
         for (Zone zone : Zone.values()) {
             List<CardSprite> cards = zones.get(zone);
-            zone.layout(cards, getWidth(), getHeight());
+            zone.layout(cards, getWidth(), getHeight(), zones.get(Zone.BUILDINGS).size());
             if (!animate) {
                 cards.forEach(CardSprite::snapToTarget);
             }
@@ -160,8 +191,8 @@ public class TablePanel extends JPanel {
         List<CardSprite> order = new ArrayList<>();
         for (Zone zone : Zone.values()) {
             List<CardSprite> cards = zones.get(zone);
-            for (int i = Math.max(0, cards.size() - zone.getVisibleLimit()); i < cards.size(); i++) {
-                if (!cards.get(i).isFlying()) order.add(cards.get(i));
+            for (int i = 0; i < cards.size(); i++) {
+                if (zone.isVisible(cards, i) && !cards.get(i).isFlying()) order.add(cards.get(i));
             }
         }
         for (Zone zone : Zone.values()) {
@@ -184,37 +215,65 @@ public class TablePanel extends JPanel {
     }
 
     private void onPress(Point p) {
+        if (isBusy()) return;
         CardSprite sprite = topCardAt(p);
-        if (sprite == null || !sprite.getZone().isSelectable()) return;
+        if (sprite == null) return;
 
-        sprite.getCard().toggleSelected();
-        sprite.refreshTarget();
-        startAnimation();
+        if (sprite.getZone().isSelectable()) {
+            sprite.getCard().toggleSelected();
+            sprite.refreshTarget();
+            startAnimation();
+        } else if (clickable.test(sprite.getCard())) {
+            clickAction.accept(sprite.getCard());
+        }
     }
 
     private void updateCursor(Point p) {
         CardSprite sprite = topCardAt(p);
-        boolean clickable = sprite != null && sprite.getZone().isSelectable();
-        setCursor(Cursor.getPredefinedCursor(clickable ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+        boolean canClick = sprite != null && (sprite.getZone().isSelectable() || clickable.test(sprite.getCard()));
+        setCursor(Cursor.getPredefinedCursor(canClick ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
     }
 
-    /** Quantidade de bens, num selo sobre a faixa da pilha que aparece acima do estabelecimento. */
+    /** Quantidade de bens, num selo sobre a faixa de cada pilha que aparece acima do estabelecimento. */
     private void drawGoodsCount(Graphics2D g) {
-        List<CardSprite> goods = zones.get(Zone.GOODS);
-        if (goods.isEmpty() || goods.getLast().isFlying()) return;
-        Rectangle top = goods.getLast().getHitBounds();
-        String text = String.valueOf(goods.size());
+        Map<Integer, List<CardSprite>> piles = new TreeMap<>();
+        for (CardSprite sprite : zones.get(Zone.GOODS)) {
+            piles.computeIfAbsent(sprite.getGroup(), k -> new ArrayList<>()).add(sprite);
+        }
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setFont(getFont().deriveFont(Font.BOLD, 14f));
-        int size = 24;
-        int cx = top.x + top.width - size - 6;
-        int cy = top.y + 5;
-        g.setColor(new Color(0x222222));
-        g.fillOval(cx, cy, size, size);
-        g.setColor(Color.WHITE);
-        g.drawOval(cx, cy, size, size);
-        int tw = g.getFontMetrics().stringWidth(text);
-        g.drawString(text, cx + (size - tw) / 2, cy + size / 2 + 5);
+        for (List<CardSprite> goods : piles.values()) {
+            if (goods.getLast().isFlying()) continue;
+            Rectangle top = goods.getLast().getHitBounds();
+            String text = String.valueOf(goods.size());
+            int size = 24;
+            int cx = top.x + top.width - size - 6;
+            int cy = top.y + 5;
+            g.setColor(new Color(0x222222));
+            g.fillOval(cx, cy, size, size);
+            g.setColor(Color.WHITE);
+            g.drawOval(cx, cy, size, size);
+            int tw = g.getFontMetrics().stringWidth(text);
+            g.drawString(text, cx + (size - tw) / 2, cy + size / 2 + 5);
+        }
+    }
+
+    /** Etiquetas numa faixa sobre a parte de baixo da carta. */
+    private void drawBadges(Graphics2D g) {
+        g.setFont(getFont().deriveFont(Font.BOLD, 13f));
+        badges.forEach((card, badge) -> {
+            CardSprite sprite = spriteByCard.get(card);
+            if (sprite == null || sprite.isFlying()) return;
+            Rectangle r = sprite.getHitBounds();
+            int h = 24;
+            int y = r.y + r.height - h - 8;
+            g.setColor(badge.color());
+            g.fillRoundRect(r.x + 6, y, r.width - 12, h, 10, 10);
+            g.setColor(Color.WHITE);
+            g.drawRoundRect(r.x + 6, y, r.width - 12, h, 10, 10);
+            int tw = g.getFontMetrics().stringWidth(badge.text());
+            g.drawString(badge.text(), r.x + (r.width - tw) / 2, y + 17);
+        });
     }
 
     @Override
@@ -226,6 +285,7 @@ public class TablePanel extends JPanel {
         }
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         drawGoodsCount(g2);
+        drawBadges(g2);
         g2.setColor(Color.WHITE);
         g2.setFont(getFont().deriveFont(Font.BOLD, 14f));
         g2.drawString(status, 20, 20);
