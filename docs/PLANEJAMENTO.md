@@ -162,11 +162,13 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** partida com 2 a 4 jogadores.
 
-- [ ] Definir o modelo de oponente (ver *Decisões em aberto*).
-- [ ] Jogador inicial alterna a cada rodada; Fase IV na ordem do turno.
-- [ ] Decisões "simultâneas" da Fase II.
-- [ ] Prioridade na contratação do mesmo assistente (jogador inicial, depois sentido horário).
-- [ ] Área de cada oponente na mesa (estabelecimentos, bens, nº de cartas na mão).
+- [x] Definir o modelo de oponente: **IA simples** controlada pelo computador (`Bot`), usando as mesmas regras de `Player`.
+- [x] Jogador inicial alterna a cada rodada; Fase IV na ordem do turno (`GameState.turnOrder`/`passStartingPlayer`).
+- [x] Decisões "simultâneas" da Fase II: os oponentes planejam quando o humano termina, com o mesmo mercado e sem ver a escolha dele.
+- [x] Prioridade na contratação do mesmo assistente: quem joga antes na ordem do turno contrata primeiro.
+- [x] Área de cada oponente na mesa (estabelecimentos, bens, nº de cartas na mão).
+
+**Fluxo:** na Fase I todos recebem cartas; ao terminar o **Planejamento**, cada oponente separa a carta a construir (a de mais pontos que os bens pagam, com folga de 2 moedas) e aloca o trabalhador onde rende mais (atento se nada falta, distraído se falta 1). No **Pôr do Sol**, os oponentes que vêm antes do humano na ordem do turno jogam a Fase IV inteira (produzir com a mão toda oferecida, cadeias enquanto der, construir ou, se não der, contratar o assistente de mais pontos); os que vêm depois jogam ao fim da vez do humano, antes do mercado ser descartado. As cartas dos oponentes ficam na zona invisível `Zone.OPPONENTS` (voam para a esquerda e somem); o painel à esquerda, abaixo da pilha de compras, mostra cada oponente (borda amarela = inicial): mão, assistentes, estabelecimentos com nº de bens (`*` trabalhador atento, `~` distraído, `+A` assistente) e o resumo da última vez. A barra de status indica quando o humano é o inicial. Regras em `Bot` e `GameState`, testadas em `RoundTest` (15 rodadas só com a IA, 2 a 4 jogadores, sem perder cartas).
 
 **Validação:** uma rodada completa com 2 jogadores roda do início ao fim sem intervenção manual nos dados.
 
@@ -223,12 +225,17 @@ Registrados ao fim de cada fase; riscar quando resolvidos.
 - **(Fase 6) Sem imagem de assistente:** fichas desenhadas (número, custo, pontos, cores). Ver *Decisões em aberto*, item 2.
 - **(Fase 6) Badges sobrepostos:** cada carta tem uma única etiqueta; na construção, o "Pagar" substitui a etiqueta do assistente.
 - **(Fase 6) Validação visual:** contratação, alocação e movimento não foram conferidos na tela pelo agente; conferir rodando `mvnw exec:java`.
+- **(Fase 7) IA simples:** o oponente nunca troca a mão, nunca move assistentes, oferece a mão inteira na produção e usa as cadeias até acabar (pode gastar cartas/bens que valeriam mais guardados). Suficiente para testar o fluxo; melhorar se ficar fácil demais.
+- **(Fase 7) Oponentes jogam de uma vez:** a Fase IV de cada oponente acontece numa só ação (no Pôr do Sol ou no fim da vez do humano); as cartas animam, mas não há pausa para acompanhar passo a passo. Rever na Fase 9.
+- **(Fase 7) Exaustão (atualização):** os oponentes também descartam metade da mão, ainda escolhida pelo jogo.
+- **(Fase 7) Espaço do painel:** com 3 oponentes e muitos estabelecimentos as caixas podem invadir a fileira de baixo. Rever na Fase 9.
+- **(Fase 7) Validação visual:** a rodada com oponentes foi validada por testes, mas a tela não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---
 
 ## Decisões em aberto
 
-1. **Oponentes (Fase 7):** IA simples controlada pelo computador, ou vários jogadores humanos no mesmo computador (*hotseat*)? Rede/online fica fora do escopo inicial.
+1. ~~**Oponentes (Fase 7):** IA simples ou *hotseat*?~~ Decidido: IA simples.
 2. **Imagens faltantes:** existem imagens para assistentes, trabalhador e verso da carta?
 3. **Documentação Técnica:** atualizar para Java/Swing?

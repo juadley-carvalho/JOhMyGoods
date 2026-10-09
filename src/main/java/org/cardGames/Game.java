@@ -4,7 +4,9 @@ import java.util.List;
 
 /**
  * Controlador do jogo: aplica as regras ao modelo (Deck, Player) e pede ao TablePanel
- * que anime o que aconteceu. Cobre a rodada de um jogador: fases I a IV do manual.
+ * que anime o que aconteceu. Cobre a rodada completa, fases I a IV do manual: o jogador humano
+ * decide pela tela e os oponentes ({@link Bot}) decidem sozinhos — no planejamento, junto com o humano
+ * (sem ver a escolha dele); na Fase IV, cada um na sua vez, a partir do jogador inicial.
  */
 public class Game {
 
@@ -56,6 +58,23 @@ public class Game {
     private Assistant toHire;   // assistente escolhido na Fase IV (em vez de construir)
     private Assistant moving;   // assistente escolhido para mudar de estabelecimento na Fase II
     private final java.util.Deque<Building> producers = new java.util.ArrayDeque<>(); // fila da produção; o primeiro produz agora
+    private final java.util.Map<Player, String> lastTurn = new java.util.HashMap<>(); // resumo da última vez de cada oponente
+
+    /** Mesa vista pelos oponentes: bens comprados vão para a área deles; cartas gastas, para o descarte. */
+    private final Bot.Table botTable = new Bot.Table() {
+        @Override
+        public Card draw() {
+            Card card = Game.this.draw();
+            if (card != null) send(card, Zone.OPPONENTS);
+            return card;
+        }
+
+        @Override
+        public void discard(Card card) {
+            deck.discard(card);
+            send(card, Zone.DISCARD);
+        }
+    };
 
     public Game(GameState state, TablePanel table) {
         this.state = state;
@@ -85,6 +104,9 @@ public class Game {
         for (Card card : player.getHand()) {
             table.addCard(card, Zone.DECK);
         }
+        for (Player opponent : state.opponents()) {
+            for (Card card : opponentCards(opponent)) table.addCard(card, Zone.DECK);
+        }
 
         clock = 0;
         List<Building> buildings = player.getBuildings();
@@ -97,7 +119,21 @@ public class Game {
         for (Card card : player.getHand()) {
             send(card, Zone.HAND);
         }
+        for (Player opponent : state.opponents()) {
+            for (Card card : opponentCards(opponent)) send(card, Zone.OPPONENTS);
+        }
         updateStatus();
+    }
+
+    /** Cartas de um oponente que estão na mesa: estabelecimentos, bens e mão. */
+    private static List<Card> opponentCards(Player opponent) {
+        List<Card> cards = new java.util.ArrayList<>();
+        for (Building building : opponent.getBuildings()) {
+            cards.add(building.getCard());
+            cards.addAll(building.getGoods());
+        }
+        cards.addAll(opponent.getHand());
+        return cards;
     }
 
     public GameState getState() { return state; }
@@ -109,8 +145,10 @@ public class Game {
 
         switch (phase) {
             case NEW_HAND -> {
-                int cards = 2 + player.newHandBonus(); // guildas de carta: +1 com até 3 cartas na mão
-                for (int i = 0; i < cards; i++) deal();
+                for (Player p : state.turnOrder()) {
+                    int cards = 2 + p.newHandBonus(); // guildas de carta: +1 com até 3 cartas na mão
+                    for (int i = 0; i < cards; i++) deal(p);
+                }
                 phase = Phase.SUNRISE;
             }
             case SUNRISE -> {
@@ -122,10 +160,16 @@ public class Game {
                     warn("Coloque o trabalhador num estabelecimento antes de continuar");
                     return;
                 }
+                // Decisões "simultâneas": os oponentes planejam com o mesmo mercado, sem ver a escolha do humano
+                for (Player opponent : state.opponents()) {
+                    Bot.plan(opponent, market);
+                    lastTurn.remove(opponent);
+                }
                 phase = Phase.SUNSET;
             }
             case SUNSET -> {
                 openMarketRow(Zone.MARKET_SUNSET);
+                playOpponents(true); // oponentes que jogam antes do humano nesta rodada
                 producers.clear();
                 producers.addAll(player.producingBuildings());
                 phase = Phase.PRODUCE;
@@ -170,7 +214,7 @@ public class Game {
             send(card, Zone.DISCARD);
         }
         for (int i = 0; i < old.size(); i++) {
-            deal();
+            deal(player);
         }
         updateStatus();
     }
@@ -425,9 +469,28 @@ public class Game {
         return true;
     }
 
-    /** Fim da rodada: o mercado é descartado e a carta planejada que não foi construída volta para a mão. */
+    /**
+     * Fase IV dos oponentes, na ordem do turno: before=true joga os que vêm antes do humano
+     * (a partir do jogador inicial), before=false os que vêm depois. Quem joga antes tem
+     * prioridade para contratar um assistente.
+     */
+    private void playOpponents(boolean before) {
+        List<Player> order = state.turnOrder();
+        int human = order.indexOf(player);
+        List<Player> turn = before ? order.subList(0, human) : order.subList(human + 1, order.size());
+        for (Player opponent : turn) {
+            lastTurn.put(opponent, Bot.playTurn(opponent, state, botTable));
+        }
+    }
+
+    /**
+     * Fim da rodada: os oponentes que faltam jogam, o mercado é descartado, a carta planejada que
+     * não foi construída volta para a mão e o próximo jogador passa a ser o inicial.
+     */
     private void endRound() {
+        playOpponents(false);
         closeMarket();
+        state.passStartingPlayer();
         player.finishProduction();
         Card planned = player.cancelPlannedBuilding();
         if (planned != null) send(planned, Zone.HAND);
@@ -447,11 +510,11 @@ public class Game {
         updateStatus();
     }
 
-    private void deal() {
+    private void deal(Player to) {
         Card card = draw();
         if (card != null) {
-            player.receive(card);
-            send(card, Zone.HAND);
+            to.receive(card);
+            send(card, to == player ? Zone.HAND : Zone.OPPONENTS);
         }
     }
 
@@ -483,7 +546,7 @@ public class Game {
             for (Player p : state.players()) {
                 for (Card card : p.discardHalf()) {
                     deck.discard(card);
-                    if (p == player) send(card, Zone.DISCARD);
+                    send(card, Zone.DISCARD);
                 }
             }
         }
@@ -526,9 +589,34 @@ public class Game {
                     + "   |   " + hint;
         }
         warning = null;
-        table.setStatus(phase.title + "   |   " + hint);
+        String starting = state.startingPlayer() == player ? " (você é o inicial)" : "";
+        table.setStatus(phase.title + starting + "   |   " + hint);
         refreshWorkerBadge();
         refreshAssistants();
+        refreshOpponents();
+    }
+
+    /**
+     * Área dos oponentes: cartas na mão, assistentes, estabelecimentos com os bens (o do trabalhador
+     * com * se atento ou ~ se distraído, só depois do planejamento; +A com assistente) e o que fizeram na última vez.
+     */
+    private void refreshOpponents() {
+        List<TablePanel.OpponentView> views = new java.util.ArrayList<>();
+        boolean revealed = phase != Phase.NEW_HAND && phase != Phase.SUNRISE && phase != Phase.PLAN;
+        for (Player opponent : state.opponents()) {
+            List<String> lines = new java.util.ArrayList<>();
+            lines.add("mão: " + opponent.getHand().size() + "   assistentes: " + opponent.getAssistants().size()
+                    + (revealed && opponent.getPlannedBuilding() != null ? "   +1 a construir" : ""));
+            lines.add(String.join(", ", opponent.getBuildings().stream().map(b -> b.getCard().getName()
+                    + (revealed && b.getPerson() instanceof Worker w
+                        ? (w.getMode() == Worker.Mode.ATTENTIVE ? "*" : "~") : "")
+                    + (b.getPerson() instanceof Assistant ? "+A" : "")
+                    + " (" + b.goodsCount() + ")").toList()));
+            String last = lastTurn.get(opponent);
+            if (last != null) lines.add("> " + last.substring(opponent.getName().length() + 2));
+            views.add(new TablePanel.OpponentView(opponent.getName(), opponent == state.startingPlayer(), lines));
+        }
+        table.setOpponents(views);
     }
 
     private String describePerson(Building building) {

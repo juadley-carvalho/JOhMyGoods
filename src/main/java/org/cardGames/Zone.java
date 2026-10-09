@@ -92,6 +92,17 @@ public enum Zone {
         }
     },
 
+    /**
+     * Cartas dos oponentes (mão, bens e estabelecimentos): não são desenhadas; as cartas voam até a
+     * área dos oponentes, à esquerda, e somem. O que cada oponente tem aparece no painel da mesa.
+     */
+    OPPONENTS(false, true, 0) {
+        @Override
+        public void layout(List<CardSprite> cards, int width, int height, int buildings) {
+            for (CardSprite card : cards) card.setSlot(SIDE, TOP + CardSprite.HEIGHT + 10);
+        }
+    },
+
     /** Mão do jogador: leque centralizado embaixo, à direita dos estabelecimentos e da carta a construir. Única área com cartas selecionáveis. */
     HAND(true, false, Integer.MAX_VALUE) {
         @Override

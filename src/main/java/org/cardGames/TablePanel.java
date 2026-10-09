@@ -50,6 +50,16 @@ public class TablePanel extends JPanel {
     private IntPredicate tileClickable = i -> false;
     private IntConsumer tileAction = i -> { };
 
+    private List<OpponentView> opponents = List.of();
+
+    /** Resumo de um oponente na área da esquerda: nome (com destaque se é o inicial) e linhas de texto. */
+    public record OpponentView(String name, boolean starting, List<String> lines) { }
+
+    private static final int OPPONENT_X = 10;
+    private static final int OPPONENT_WIDTH = 190;
+    private static final int OPPONENT_TOP = 30 + CardSprite.HEIGHT + 10; // logo abaixo da pilha de compras
+    private static final int LINE_HEIGHT = 13;
+
     /** Ficha desenhada na lateral direita da mesa (ex.: assistente disponível para contratar). */
     public record Tile(String title, String detail, Color color) { }
 
@@ -145,6 +155,11 @@ public class TablePanel extends JPanel {
     /** Fichas da lateral (assistentes), e quais respondem ao clique e o que fazer (recebe o índice). */
     public void setTiles(List<Tile> tiles) {
         this.tiles = List.copyOf(tiles);
+        repaint();
+    }
+
+    public void setOpponents(List<OpponentView> opponents) {
+        this.opponents = List.copyOf(opponents);
         repaint();
     }
 
@@ -336,6 +351,46 @@ public class TablePanel extends JPanel {
         }
     }
 
+    /** Área dos oponentes: uma caixa por oponente, com as linhas quebradas na largura da caixa. */
+    private void drawOpponents(Graphics2D g) {
+        int y = OPPONENT_TOP;
+        for (OpponentView view : opponents) {
+            g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
+            List<String> lines = new ArrayList<>();
+            for (String line : view.lines()) lines.addAll(wrap(g, line, OPPONENT_WIDTH - 12));
+            int h = 20 + lines.size() * LINE_HEIGHT + 4;
+            g.setColor(new Color(0, 0, 0, 90));
+            g.fillRoundRect(OPPONENT_X, y, OPPONENT_WIDTH, h, 10, 10);
+            g.setColor(view.starting() ? new Color(0xFFD54F) : Color.WHITE);
+            g.drawRoundRect(OPPONENT_X, y, OPPONENT_WIDTH, h, 10, 10);
+            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
+            g.drawString(view.name() + (view.starting() ? "  (inicial)" : ""), OPPONENT_X + 6, y + 15);
+            g.setColor(Color.WHITE);
+            g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
+            for (int i = 0; i < lines.size(); i++) {
+                g.drawString(lines.get(i), OPPONENT_X + 6, y + 20 + (i + 1) * LINE_HEIGHT - 2);
+            }
+            y += h + 6;
+        }
+    }
+
+    /** Quebra o texto em linhas que caibam em width pixels (separando por espaços). */
+    private static List<String> wrap(Graphics2D g, String text, int width) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : text.split(" ")) {
+            String candidate = line.isEmpty() ? word : line + " " + word;
+            if (!line.isEmpty() && g.getFontMetrics().stringWidth(candidate) > width) {
+                lines.add(line.toString());
+                line = new StringBuilder(word);
+            } else {
+                line = new StringBuilder(candidate);
+            }
+        }
+        if (!line.isEmpty()) lines.add(line.toString());
+        return lines;
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g); // pinta o fundo
@@ -347,6 +402,7 @@ public class TablePanel extends JPanel {
         drawGoodsCount(g2);
         drawBadges(g2);
         drawTiles(g2);
+        drawOpponents(g2);
         g2.setColor(Color.WHITE);
         g2.setFont(getFont().deriveFont(Font.BOLD, 14f));
         g2.drawString(status, 20, 20);
