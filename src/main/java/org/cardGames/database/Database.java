@@ -46,7 +46,7 @@ public class Database {
                         rs.getInt("CAR_PONTOS"),
                         rs.getInt("CAR_CUSTO"),
                         Resource.fromString(rs.getString("CAR_RECURSO")),
-                        rs.getInt("CAR_SOL") == 1,
+                        (rs.getInt("CAR_SOL") == 1),
                         Resource.fromString(rs.getString("CAR_PRODUTO")),
                         rs.getInt("CAR_QUANTIDADE_PROD_1"),
                         rs.getInt("CAR_QUANTIDADE_PROD_2"),

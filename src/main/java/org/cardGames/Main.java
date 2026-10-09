@@ -7,13 +7,11 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) {
         Database database = new Database();
-        List<Card> deck = Setup.createDeck(database);
-        for (Card card : deck) {
-            card.info();
-        }
+        List<Card> cards = Setup.createDeck(database);
 
-        Player player = new Player(deck);
+        Deck deck = new Deck(cards);
+        Player player = new Player();
 
-        new MainWindow(player);
+        new MainWindow(deck, player);
     }
 }

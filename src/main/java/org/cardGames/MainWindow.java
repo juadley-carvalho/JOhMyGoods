@@ -1,33 +1,30 @@
 package org.cardGames;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.event.KeyEvent;
 
 public class MainWindow extends JFrame {
 
-        private final int cardWidth = 118;
-        private final int cardHeight = 184;
-
-    public MainWindow(Player player) {
+    public MainWindow(Deck deck, Player player) {
         super("Oh My Goods!");
-        setSize(800, 600);
-        setLayout(null);
-        setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        showPlayerHand(player);
+        TablePanel table = new TablePanel();
+        table.setPreferredSize(new Dimension(1024, 680)); // área de jogo, sem contar a barra de título
+        add(table, BorderLayout.CENTER);
 
+        Game game = new Game(deck, player, table);
+        table.onKey(KeyEvent.VK_SPACE, game::advance);
+        table.onKey(KeyEvent.VK_R, game::replaceHand);
+
+        pack();
+        setLocationRelativeTo(null);
         setVisible(true);
-    }
 
-    public void showPlayerHand(Player player) {
-        int initialX = 200 + (player.getHand().size() * 30);
-        for (Card card : player.getHand()) {
-            CardLabel label = new CardLabel(card, cardWidth, cardHeight);
-            label.setLocation(initialX, 200);
-            initialX -= 30;
-            add(label);
-        }
+        // Depois do primeiro layout da janela, para a distribuição inicial aparecer animada
+        SwingUtilities.invokeLater(game::start);
     }
 }

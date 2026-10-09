@@ -76,8 +76,11 @@ public class Card {
         return selectedImage;
     }
 
+    public String getName(){ return name; }
     public BufferedImage getImage() { return image; }
     public BufferedImage getSelectedImage() { return selectedImage; }
     public boolean isSelected() { return isSelected; }
     public void toggleSelected() { isSelected = !isSelected; }
+    public boolean isSun() { return sun; }
+    public void setSelected(boolean selected) { this.isSelected = selected; }
 }
