@@ -41,11 +41,16 @@ public final class Bot {
      * os bens atuais pagam, com uma folga de 2 moedas para a produção da rodada.
      */
     static void planBuilding(Player player) {
-        int budget = player.getBuildings().stream().mapToInt(Building::goodsValue).sum() + 2;
+        int budget = budget(player);
         player.getHand().stream()
                 .filter(c -> c.getCost() > 0 && c.getCost() <= budget)
                 .max(Comparator.comparingInt(Card::getPoints).thenComparing(Card::getCost, Comparator.reverseOrder()))
                 .ifPresent(player::planBuilding);
+    }
+
+    /** Moedas em bens, com uma folga de 2 para a produção da rodada. */
+    private static int budget(Player player) {
+        return player.getBuildings().stream().mapToInt(Building::goodsValue).sum() + 2;
     }
 
     /** Trabalhador: estabelecimento com mais moedas produzidas; atento se nada falta, distraído se falta 1. */
@@ -155,6 +160,34 @@ public final class Bot {
             return "contratou " + assistant;
         }
         return null;
+    }
+
+    // ------------------------------------------------------- exaustão
+
+    /**
+     * Regra de exaustão: descarta metade da mão, ficando com as cartas mais úteis (empatando,
+     * descarta as primeiras). Devolve as cartas descartadas.
+     */
+    public static List<Card> discardForExhaustion(Player player) {
+        int budget = budget(player);
+        List<Card> worst = player.getHand().stream()
+                .sorted(Comparator.comparingInt(c -> usefulness(player, c, budget)))
+                .limit(player.exhaustionDiscards()).toList();
+        return player.discardChosen(worst);
+    }
+
+    /** Utilidade da carta: quanto os estabelecimentos usam o recurso dela (produção e cadeia) e se já dá para construí-la. */
+    static int usefulness(Player player, Card card, int budget) {
+        int score = 0;
+        Resource resource = card.getResource();
+        if (resource != null) {
+            for (Building building : player.getBuildings()) {
+                score += building.getCard().getRawResources().getOrDefault(resource, 0);
+                if (building.getCard().getChainResources().contains(resource)) score++;
+            }
+        }
+        if (card.getCost() > 0 && card.getCost() <= budget) score += card.getPoints() + 1;
+        return score;
     }
 
     private static Map<Resource, Integer> withHand(Map<Resource, Integer> free, List<Card> hand) {

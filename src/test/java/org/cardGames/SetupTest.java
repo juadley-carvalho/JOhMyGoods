@@ -95,6 +95,16 @@ class SetupTest {
     }
 
     @Test
+    void mesmaSementeRepeteAPartida() {
+        GameState a = newGame(3);
+        GameState b = newGame(3);
+        assertEquals(a.deck().getDrawPile(), b.deck().getDrawPile());
+        for (int i = 0; i < 3; i++) {
+            assertEquals(a.players().get(i).getHand(), b.players().get(i).getHand());
+        }
+    }
+
+    @Test
     void recusaNumeroInvalidoDeJogadores() {
         assertThrows(IllegalArgumentException.class, () -> newGame(1));
         assertThrows(IllegalArgumentException.class, () -> newGame(5));

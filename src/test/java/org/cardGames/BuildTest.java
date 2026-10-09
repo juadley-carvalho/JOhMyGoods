@@ -143,6 +143,19 @@ class BuildTest {
     }
 
     @Test
+    void oponenteGuardaAsCartasUteisNaExaustao() {
+        java.util.Set<Resource> used = player.getCharcoalBurner().getCard().getRawResources().keySet();
+        Card useful1 = take(c -> used.contains(c.getResource()));
+        Card useful2 = take(c -> used.contains(c.getResource()));
+        Card useless1 = take(c -> c.getResource() != null && !used.contains(c.getResource()) && c.getCost() > 2);
+        Card useless2 = take(c -> c.getResource() != null && !used.contains(c.getResource()) && c.getCost() > 2);
+        for (Card card : List.of(useful1, useless1, useful2, useless2)) player.receive(card);
+
+        assertEquals(java.util.Set.of(useless1, useless2), java.util.Set.copyOf(Bot.discardForExhaustion(player)));
+        assertEquals(List.of(useful1, useful2), player.getHand());
+    }
+
+    @Test
     void exaustaoComAsCartasEscolhidas() {
         List<Card> hand = new ArrayList<>();
         for (int i = 0; i < 5; i++) {

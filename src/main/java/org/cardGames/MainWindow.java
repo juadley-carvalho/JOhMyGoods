@@ -34,7 +34,6 @@ public class MainWindow extends JFrame {
         table.onKey(KeyEvent.VK_K, game::runChain);
         table.onKey(KeyEvent.VK_H, this::showHelp);
         game.onGameOver(this::showResult);
-        game.onInfo(info -> setTitle("Oh My Goods!   -   " + info));
 
         pack();
         setLocationRelativeTo(null);

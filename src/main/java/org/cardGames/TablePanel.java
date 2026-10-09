@@ -53,6 +53,7 @@ public class TablePanel extends JPanel {
     private String statusTitle = "";
     private String statusHint = "";
     private boolean statusWarning;
+    private String counter = "";
     private Runnable selectionListener = () -> { };
     private List<Tile> tiles = List.of();
     private IntPredicate tileClickable = i -> false;
@@ -269,6 +270,12 @@ public class TablePanel extends JPanel {
         this.statusTitle = title;
         this.statusHint = hint;
         this.statusWarning = warning;
+        repaint();
+    }
+
+    /** Contador do jogador (moedas, pontos, cartas), alinhado à direita na 1ª linha da barra de status. */
+    public void setCounter(String counter) {
+        this.counter = counter;
         repaint();
     }
 
@@ -715,13 +722,20 @@ public class TablePanel extends JPanel {
         }
     }
 
-    /** Barra de status em duas linhas; a 2ª mostra o aviso (amarelo) ou o passo do oponente (azul) quando há. */
+    /**
+     * Barra de status em duas linhas; a 2ª mostra o aviso (amarelo) ou o passo do oponente (azul) quando há.
+     * O contador do jogador fica à direita da 1ª linha.
+     */
     private void drawStatus(Graphics2D g) {
         int width = getWidth() - 40;
+        g.setColor(new Color(0xFFE082));
+        g.setFont(getFont().deriveFont(Font.BOLD, 12f));
+        int counterWidth = g.getFontMetrics().stringWidth(counter);
+        g.drawString(counter, getWidth() - 20 - counterWidth, 18);
         g.setColor(Color.WHITE);
         g.setFont(getFont().deriveFont(Font.BOLD, 14f));
         String title = narration != null ? narrationTitle : statusTitle;
-        g.drawString(ellipsize(g.getFontMetrics(), title, width), 20, 18);
+        g.drawString(ellipsize(g.getFontMetrics(), title, width - counterWidth - 20), 20, 18);
         String hint = statusHint;
         if (narration != null) {
             g.setColor(new Color(0x90CAF9));

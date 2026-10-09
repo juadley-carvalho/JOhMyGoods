@@ -34,7 +34,7 @@ public final class Help {
             + "<p><b>Cadeia:</b> se o bem que falta está em mais de um estabelecimento, clique naquele de onde "
             + "ele deve sair. <b>Exaustão:</b> quando compras e descarte acabam, escolha na mão metade das "
             + "cartas para descartar e aperte ESPAÇO.</p>"
-            + "<p>O título da janela mostra suas moedas em bens, pontos e cartas na mão. Passe o mouse sobre "
+            + "<p>O canto direito da barra de cima mostra suas moedas em bens, pontos e cartas na mão. Passe o mouse sobre "
             + "um oponente ou um assistente para ver o detalhe. O quadro <b>Dicas</b>, à direita, explica as "
             + "opções da etapa em que você está.</p>"
             + "</body></html>";

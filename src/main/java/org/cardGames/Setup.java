@@ -50,7 +50,7 @@ public class Setup {
             throw new IllegalArgumentException("faltam Carvoarias para " + numPlayers + " jogadores");
         }
 
-        Deck deck = new Deck(cards);
+        Deck deck = new Deck(cards, random);
 
         List<Card> burners = new ArrayList<>(charcoalBurners);
         Collections.shuffle(burners, random);

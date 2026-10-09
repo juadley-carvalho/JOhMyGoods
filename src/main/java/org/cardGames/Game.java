@@ -75,7 +75,6 @@ public class Game {
     private SecondaryLoop exhaustionLoop; // segura a ação em andamento enquanto o humano escolhe
     private boolean autoExhaustion; // capturas de tela: o jogo escolhe o descarte do humano também
     private java.util.function.Consumer<List<Scoring.Score>> onGameOver = ranking -> { };
-    private java.util.function.Consumer<String> onInfo = info -> { };
 
     /** Mesa vista pelos oponentes: bens comprados vão para a área deles; cartas gastas, para o descarte. */
     private final Bot.Table botTable = new Bot.Table() {
@@ -178,11 +177,6 @@ public class Game {
     /** Chamado (com a classificação) quando o jogador pede o resultado ao fim da partida. */
     public void onGameOver(java.util.function.Consumer<List<Scoring.Score>> listener) {
         this.onGameOver = listener;
-    }
-
-    /** Recebe o resumo do jogador humano (moedas em bens, pontos, cartas) a cada mudança. */
-    public void onInfo(java.util.function.Consumer<String> listener) {
-        this.onInfo = listener;
     }
 
     /** Avança para a próxima etapa da rodada. */
@@ -724,12 +718,12 @@ public class Game {
 
     /**
      * Regra de exaustão (compras e descarte vazios): cada jogador descarta metade da mão. Os oponentes
-     * descartam na hora; o humano escolhe as cartas na mesa e a ação em andamento espera (a tela continua
-     * respondendo, como numa janela modal) até ele confirmar com ESPAÇO.
+     * descartam na hora, ficando com as cartas mais úteis; o humano escolhe as cartas na mesa e a ação
+     * em andamento espera (a tela continua respondendo, como numa janela modal) até ele confirmar com ESPAÇO.
      */
     private void exhaust() {
         for (Player opponent : state.opponents()) {
-            for (Card card : opponent.discardHalf()) {
+            for (Card card : Bot.discardForExhaustion(opponent)) {
                 deck.discard(card);
                 send(card, Zone.DISCARD);
             }
@@ -842,10 +836,13 @@ public class Game {
         int coins = Scoring.score(player).coins();
         switch (phase) {
             case PLAN -> {
-                List<String> affordable = player.getHand().stream().filter(c -> c.getCost() <= coins)
+                int guaranteed = guaranteedCoins();
+                List<String> affordable = player.getHand().stream().filter(c -> c.getCost() <= coins + guaranteed)
                         .map(c -> c.getName() + " (" + c.getCost() + ")").toList();
-                tips.add("Seus bens valem " + coins + " moedas. " + (affordable.isEmpty()
-                        ? "Nenhuma carta da mão cabe nisso ainda; os bens desta rodada também vão contar."
+                tips.add("Seus bens valem " + coins + " moedas" + (guaranteed == 0 ? ". "
+                        : "; a produção já garante +" + guaranteed + " (com o mercado e as guildas). ")
+                        + (affordable.isEmpty()
+                        ? "Nenhuma carta da mão cabe nisso ainda; o que a mão completar na produção também vai contar."
                         : "Já cabem: " + String.join(", ", affordable) + "."));
                 if (!player.getAssistants().isEmpty()) {
                     tips.add("Clique num assistente e depois num estabelecimento livre para mudá-lo ("
@@ -929,11 +926,21 @@ public class Game {
         table.setOpponents(views);
     }
 
-    /** Contador (no título da janela): moedas em bens (o que vale para pagar e para pontuar), pontos e cartas na mão. */
+    /** Contador (à direita na barra de status): moedas em bens (o que vale para pagar e para pontuar), pontos e cartas na mão. */
     private void refreshInfo() {
         Scoring.Score score = Scoring.score(player);
-        onInfo.accept(player.getName() + ":  " + score.coins() + " moedas em bens   |   " + score.total() + " pts   |   "
+        table.setCounter(player.getName() + ":  " + score.coins() + " moedas em bens   |   " + score.total() + " pts   |   "
                 + player.getHand().size() + " cartas   |   H: ajuda");
+    }
+
+    /**
+     * Moedas que a produção desta rodada já garante: estabelecimentos ocupados que produzem só com o
+     * mercado e as guildas, sem gastar cartas da mão (o mercado só cresce até a produção).
+     */
+    private int guaranteedCoins() {
+        java.util.Map<Resource, Integer> free = Production.freeResources(player, market);
+        return player.producingBuildings().stream()
+                .mapToInt(b -> Production.goods(b, free, List.of()) * b.getCard().getGoodValue()).sum();
     }
 
     private String describePerson(Building building) {

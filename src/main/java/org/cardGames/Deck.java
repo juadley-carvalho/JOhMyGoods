@@ -3,6 +3,7 @@ package org.cardGames;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 /**
  * Pilha de compras e pilha de descarte. O topo de cada pilha é o ÚLTIMO elemento da lista,
@@ -12,10 +13,17 @@ public class Deck {
 
     private final List<Card> drawPile = new ArrayList<>();
     private final List<Card> discardPile = new ArrayList<>();
+    private final Random random;
 
     public Deck(List<Card> cards) {
+        this(cards, new Random());
+    }
+
+    /** Com a mesma semente, o embaralhamento (inicial e dos reembaralhamentos) se repete. */
+    public Deck(List<Card> cards, Random random) {
+        this.random = random;
         drawPile.addAll(cards);
-        Collections.shuffle(drawPile);
+        Collections.shuffle(drawPile, random);
 
         long suns = drawPile.stream().filter(Card::isSun).count();
 
@@ -40,7 +48,7 @@ public class Deck {
 
     /** Embaralha o descarte para dentro da pilha de compras e devolve a nova ordem (fundo -> topo). */
     public List<Card> reshuffle() {
-        Collections.shuffle(discardPile);
+        Collections.shuffle(discardPile, random);
         drawPile.addAll(discardPile);
         discardPile.clear();
         return List.copyOf(drawPile);
