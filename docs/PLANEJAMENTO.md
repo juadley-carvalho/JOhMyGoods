@@ -280,6 +280,22 @@ Testes novos em `ChainTest` (origem do couro com dois Curtumes), `BuildTest` (de
 
 ---
 
+## Fase 15 — Visual da mesa
+
+**Objetivo:** atender às considerações visuais do usuário (09/10/2026): fontes, carta selecionada, caixas dos oponentes, dicas, fichas de assistente, mensagem de cima e painel do jogador.
+
+- [x] Fontes do jogo: Nunito (texto) e Cinzel (títulos), em `src/main/resources/fonts` (licença OFL, arquivos `OFL-*.txt` junto). A classe `Hud` carrega e registra as fontes e desenha painéis com sombra, teclas e ícones (moeda, escudo, casa, cartas, pessoa). A tela inicial, a ajuda e o resultado usam as mesmas fontes.
+- [x] Carta selecionada inteira: sobe 40 px (antes 30), passa para cima das vizinhas (desenho e clique) e ganha contorno dourado.
+- [x] Caixas dos oponentes: avatar com a inicial, nome, marcas "INICIAL" e "+1 OBRA", números com ícones (pontos, estabelecimentos, moedas em bens, mão, assistentes) e a última jogada. O detalhe (mouse) começa com os mesmos números por extenso.
+- [x] Dicas: fonte maior e mais grossa (de 15 a 11, a maior que couber); o quadro ocupa a coluna até embaixo.
+- [x] Fichas de assistente: degradê, sombra, moeda e escudo no lugar de "custo · pts"; acendem sob o mouse quando clicáveis.
+- [x] Caixa de mensagem no alto, como num jogo narrado: a etapa numa plaqueta sobre a borda (com "RODADA FINAL" e "você é o inicial" ao lado), o contexto em destaque e o que fazer em itens, com as teclas desenhadas. Borda azul na narração dos oponentes e âmbar nos avisos. `Zone.TOP` passou de 46 para 92.
+- [x] Painel do jogador no canto superior direito: nome, tecla H da ajuda e moedas em bens, pontos e cartas com ícones.
+
+**Validação:** testes passam (86); capturas antes/depois de todas as etapas em `Snapshots`, mais a nova `2d-carta-selecionada` (1ª carta da mão, a mais coberta, aparece inteira). A tela inicial foi conferida numa captura fora da janela.
+
+---
+
 ## Pontos de atenção
 
 Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *Concluídos* com a resolução.
@@ -296,6 +312,9 @@ Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *
 - **(Fase 12) Descarte do oponente:** a utilidade da carta é uma heurística simples (recurso usado pelos estabelecimentos, carta que já dá para construir); não olha o mercado nem o que falta para produzir.
 - **(Fase 13) Etiquetas empilhadas:** com 3 ou mais etiquetas na mesma carta (ex.: assistente, origem e pagamento), elas cobrem boa parte da arte; na prática aparecem no máximo 2 ao mesmo tempo.
 - **(Fase 14) Previsão da produção:** a previsão gasta as cartas da mão na ordem da fila de produção e de forma gulosa; o jogador pode preferir outra combinação (ou guardar uma carta para construir). A 2ª fileira do mercado continua fora, porque ainda não foi aberta.
+- **(Fase 15) Tela baixa:** com a caixa de mensagem maior (`Zone.TOP` = 92), em janelas com menos de ~710 px de altura (telas de 768 px) a carta selecionada na mão pode encostar na 2ª fileira do mercado (Fases III e IV). Na janela padrão (760 px) sobra espaço.
+- **(Fase 15) Nome interno das fontes:** os arquivos Nunito vieram do Fontsource com o nome interno "Nunito ExtraLight" (herdado da fonte variável), mas o peso de cada arquivo está certo. O jogo usa os arquivos direto (`Hud`); só o HTML da ajuda depende desse nome (`Hud.htmlFamily()`).
+- **(Fase 15) Mensagem longa:** a caixa de mensagem tem 3 linhas; se o contexto e os itens não couberem, os últimos itens não aparecem (não acontece em nenhuma etapa atual na janela padrão).
 
 ### Situação das pendências (análise de 09/10/2026)
 

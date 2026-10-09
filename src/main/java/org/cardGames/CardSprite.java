@@ -19,8 +19,8 @@ public class CardSprite {
 
     public static final int WIDTH = 118;
     public static final int HEIGHT = 184;
-    /** Quantos pixels a carta sobe quando selecionada. */
-    public static final int LIFT = 30;
+    /** Quantos pixels a carta sobe quando selecionada (ela também passa para cima das vizinhas). */
+    public static final int LIFT = 40;
     /** Fração do caminho percorrida por quadro (0..1): maior = animação mais rápida. */
     private static final double EASING = 0.25;
 
@@ -56,7 +56,7 @@ public class CardSprite {
     /** Posição horizontal de repouso (sem contar a animação em andamento). */
     public int getSlotX() { return slotX; }
 
-    /** Recalcula o destino: no slot, ou 30px acima dele se a carta estiver selecionada. */
+    /** Recalcula o destino: no slot, ou LIFT pixels acima dele se a carta estiver selecionada. */
     public void refreshTarget() {
         targetX = slotX;
         targetY = slotY - (card.isSelected() ? LIFT : 0);
@@ -103,6 +103,11 @@ public class CardSprite {
     public Rectangle getHitBounds() {
         Rectangle current = new Rectangle((int) Math.round(x), (int) Math.round(y), WIDTH, HEIGHT);
         return current.union(new Rectangle(slotX, slotY, WIDTH, HEIGHT));
+    }
+
+    /** Onde a carta está desenhada agora. */
+    public Rectangle getBounds() {
+        return new Rectangle((int) Math.round(x), (int) Math.round(y), WIDTH, HEIGHT);
     }
 
     public Card getCard() { return card; }

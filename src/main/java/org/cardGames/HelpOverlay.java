@@ -14,7 +14,6 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
@@ -119,10 +118,10 @@ public final class HelpOverlay extends JComponent {
         header.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
         JLabel title = new JLabel("Como jogar");
         title.setForeground(StartScreen.GOLD);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 24f));
+        title.setFont(Hud.title(26f));
         JLabel subtitle = new JLabel("Oh My Goods! - regras resumidas e controles");
         subtitle.setForeground(StartScreen.SOFT);
-        subtitle.setFont(subtitle.getFont().deriveFont(Font.PLAIN, 13f));
+        subtitle.setFont(Hud.regular(13.5f));
         JPanel titles = new JPanel(new BorderLayout());
         titles.setOpaque(false);
         titles.add(title, BorderLayout.NORTH);
@@ -140,7 +139,7 @@ public final class HelpOverlay extends JComponent {
                 return StartScreen.FIELD_OFF;
             }
         };
-        x.setFont(x.getFont().deriveFont(Font.BOLD, 20f));
+        x.setFont(Hud.bold(20f));
         x.setPreferredSize(new Dimension(34, 34));
         x.setToolTipText("Fechar (H ou Esc)");
         JPanel corner = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
@@ -155,7 +154,7 @@ public final class HelpOverlay extends JComponent {
         HTMLEditorKit kit = new HTMLEditorKit();
         StyleSheet css = new StyleSheet();
         css.addStyleSheet(kit.getStyleSheet());
-        css.addRule("body { color: #FFFFFF; font-family: Dialog; font-size: 12pt; margin: 0 }");
+        css.addRule("body { color: #FFFFFF; font-family: '" + Hud.htmlFamily() + "'; font-size: 12pt; margin: 0 }");
         css.addRule("h2 { color: #FFD54F; font-size: 14pt; margin-top: 10px; margin-bottom: 5px }");
         css.addRule("p { margin-top: 0; margin-bottom: 6px }");
         css.addRule("td.def { padding-bottom: 5px; color: #FFFFFF }");
@@ -185,7 +184,7 @@ public final class HelpOverlay extends JComponent {
         footer.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
         JLabel hint = new JLabel("H ou Esc fecha a ajuda");
         hint.setForeground(StartScreen.SOFT);
-        hint.setFont(hint.getFont().deriveFont(Font.PLAIN, 12f));
+        hint.setFont(Hud.regular(12.5f));
         footer.add(hint, BorderLayout.WEST);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         buttons.setOpaque(false);

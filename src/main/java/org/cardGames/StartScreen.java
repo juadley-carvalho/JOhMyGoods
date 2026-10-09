@@ -270,14 +270,14 @@ public final class StartScreen extends JPanel {
     private static JLabel label(String text, Color color, int style, float size, int align) {
         JLabel label = new JLabel(text, align);
         label.setForeground(color);
-        label.setFont(label.getFont().deriveFont(style, size));
+        label.setFont(style == Font.BOLD ? Hud.bold(size) : Hud.regular(size));
         return label;
     }
 
     /** Campo escuro com texto branco; a borda fica dourada quando o campo está em foco. */
     private static JTextField field(String text) {
         JTextField field = new JTextField(text, 16);
-        field.setFont(field.getFont().deriveFont(Font.PLAIN, 14f));
+        field.setFont(Hud.semibold(14f));
         field.setBackground(FIELD);
         field.setForeground(Color.WHITE);
         field.setCaretColor(GOLD);
@@ -307,7 +307,7 @@ public final class StartScreen extends JPanel {
         private static final String TEXT = "Oh My Goods!";
 
         Title() {
-            setFont(new JLabel().getFont().deriveFont(Font.BOLD, 34f));
+            setFont(Hud.title(38f));
             setPreferredSize(new Dimension(320, 48));
         }
 
@@ -336,7 +336,7 @@ public final class StartScreen extends JPanel {
             setFocusable(false); // Enter/Esc ficam com a tela; os campos mantêm o foco
             setRolloverEnabled(true);
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            setFont(getFont().deriveFont(Font.BOLD, 14f));
+            setFont(Hud.bold(14f));
             addActionListener(e -> action.run());
         }
 
@@ -387,7 +387,7 @@ public final class StartScreen extends JPanel {
     private static final class ChoiceButton extends PaintedButton {
         ChoiceButton(String text, Runnable action) {
             super(text, action);
-            setFont(getFont().deriveFont(Font.BOLD, 16f));
+            setFont(Hud.heavy(16f));
             setPreferredSize(new Dimension(52, 40));
         }
 

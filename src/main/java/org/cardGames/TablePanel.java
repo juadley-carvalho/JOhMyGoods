@@ -5,6 +5,7 @@ import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Font;
@@ -30,6 +31,8 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A mesa inteira desenhada num único painel. Como todas as áreas (mão, mercado,
@@ -51,9 +54,11 @@ public class TablePanel extends JPanel {
     private Consumer<Card> clickAction = card -> { };
     private Consumer<Card> rightClickAction = card -> { };
     private String statusTitle = "";
+    private List<String> statusFlags = List.of();
+    private String statusContext;
     private String statusHint = "";
     private boolean statusWarning;
-    private String counter = "";
+    private CounterView counter;
     private Runnable selectionListener = () -> { };
     private List<Tile> tiles = List.of();
     private IntPredicate tileClickable = i -> false;
@@ -62,7 +67,7 @@ public class TablePanel extends JPanel {
 
     private final List<Narration> narrations = new ArrayList<>();
     private String narration;  // o que o oponente acabou de fazer (no lugar da dica)
-    private String narrationTitle; // etapa mostrada na 1ª linha enquanto há narração
+    private String narrationTitle; // etapa mostrada na plaqueta enquanto há narração
     private int narrationHoldMs;
     private List<OpponentView> pendingOpponents; // resumo novo, mostrado só quando a narração acabar
 
@@ -75,25 +80,46 @@ public class TablePanel extends JPanel {
     private List<String> tips = List.of(); // quadro de dicas da etapa, abaixo dos assistentes
 
     private static final int TIPS_GAP = 10;
-    private static final int TIPS_MIN_HEIGHT = 50; // com menos espaço que isso, o quadro não aparece
+    private static final int TIPS_MIN_HEIGHT = 60; // com menos espaço que isso, o quadro não aparece
+    private static final int TIPS_PAD = 12;
+    private static final int TIPS_HEADER = 42;     // título "Dicas" e o traço abaixo dele
+    private static final int TIPS_BULLET = 14;
+    private static final int TIPS_ITEM_GAP = 7;
+    private static final float TIPS_MAX_FONT = 15f;
+    private static final float TIPS_MIN_FONT = 11f;
 
     /**
-     * Resumo de um oponente na coluna da esquerda: nome (com destaque se é o inicial), poucas linhas
-     * na caixa e o detalhe (estabelecimentos, bens) mostrado ao passar o mouse.
+     * Resumo de um oponente na coluna da esquerda: nome (com destaque se é o inicial), os números com ícones
+     * (pontos, estabelecimentos, moedas em bens, mão, assistentes), se tem carta a construir, o que fez por
+     * último (ou null) e o detalhe (estabelecimentos, bens) mostrado ao passar o mouse.
      */
-    public record OpponentView(String name, boolean starting, List<String> lines, List<String> detail) { }
+    public record OpponentView(String name, boolean starting, boolean planning, int points, int buildings, int coins,
+                               int hand, int assistants, String last, List<String> detail) { }
 
     private static final int OPPONENT_X = 10;
-    private static final int OPPONENT_WIDTH = 190;
+    private static final int OPPONENT_WIDTH = 214;
     private static final int OPPONENT_GAP = 6;
-    private static final int LINE_HEIGHT = 13;
+    private static final int LINE_HEIGHT = 16; // linhas dos detalhes ao passar o mouse
+    private static final int OPPONENT_HEAD = 30;  // avatar, nome e marcas
+    private static final int OPPONENT_STATS = 22; // números com ícones
+    private static final int OPPONENT_LAST = 17;  // o que fez por último
+    private static final Color[] AVATARS = {new Color(0xC62828), new Color(0x1565C0), new Color(0xEF6C00)};
 
-    /** Ficha da lateral direita (assistente disponível): título, info à direita, cores exigidas e detalhe (ao passar o mouse). */
-    public record Tile(String title, String info, String detail, List<Color> chips, Color color) { }
+    /** Ficha da lateral direita (assistente disponível): título, custo, pontos, cores exigidas e detalhe (ao passar o mouse). */
+    public record Tile(String title, int cost, int points, String detail, List<Color> chips, Color color) { }
+
+    /** Painel do jogador no canto superior direito: nome, moedas em bens, pontos e cartas na mão. */
+    public record CounterView(String name, int coins, int points, int cards) { }
+
+    private static final int HUD_Y = 12;       // topo da caixa de mensagem e do painel do jogador
+    private static final int HUD_HEIGHT = 72;
+    private static final int HUD_ROWS = 3;     // linhas de texto da caixa de mensagem
+    private static final int HUD_ROW = 18;
+    private static final int COUNTER_WIDTH = 320;
 
     private static final int TILE_COLUMNS = 2;
     private static final int TILE_WIDTH = 150;
-    private static final int TILE_HEIGHT = 36;
+    private static final int TILE_HEIGHT = 38;
     private static final int TILE_PAD = 8;
     private static final int TILE_GAP = 6;
     private static final int TILE_SIDE = 50;
@@ -108,7 +134,7 @@ public class TablePanel extends JPanel {
     private record Badge(String text, Color color) { }
 
     /**
-     * Texto que aparece na barra de status depois de delayMs (passo de um oponente), com a etapa na 1ª linha;
+     * Texto que aparece na caixa de mensagem depois de delayMs (passo de um oponente), com a etapa na plaqueta;
      * opponents (se não for null) é o resumo dos oponentes logo depois desse passo.
      */
     private static final class Narration {
@@ -272,22 +298,28 @@ public class TablePanel extends JPanel {
         this.tileAction = action;
     }
 
-    /** Barra de status: a 1ª linha diz a etapa; a 2ª, o que fazer (em destaque se for um aviso). */
-    public void setStatus(String title, String hint, boolean warning) {
+    /**
+     * Caixa de mensagem: a etapa vai na plaqueta (com as marcas, ex.: rodada final), o contexto (ou null) em
+     * destaque e o que fazer em itens separados por "   |   " ("TECLA: texto" vira uma tecla desenhada).
+     * Com warning, o hint é o aviso, em âmbar.
+     */
+    public void setStatus(String title, List<String> flags, String context, String hint, boolean warning) {
         this.statusTitle = title;
+        this.statusFlags = List.copyOf(flags);
+        this.statusContext = context;
         this.statusHint = hint;
         this.statusWarning = warning;
         repaint();
     }
 
-    /** Contador do jogador (moedas, pontos, cartas), alinhado à direita na 1ª linha da barra de status. */
-    public void setCounter(String counter) {
+    /** Painel do jogador (moedas, pontos, cartas), no canto superior direito. */
+    public void setCounter(CounterView counter) {
         this.counter = counter;
         repaint();
     }
 
     /**
-     * Mostra o texto na barra de status depois de delayMs (no lugar da dica, com title na 1ª linha),
+     * Mostra o texto na caixa de mensagem depois de delayMs (no lugar da dica, com title na plaqueta),
      * enquanto as cartas se movem: é como os passos dos oponentes aparecem um de cada vez.
      * A mesa fica ocupada até a última narração ter ficado um tempo na tela.
      */
@@ -357,7 +389,7 @@ public class TablePanel extends JPanel {
         for (int t = 0; t < ms && animationTimer.isRunning(); t += TICK_MS) tick();
     }
 
-    /** A 2ª linha da barra de status (para as capturas). */
+    /** O que fazer (ou o aviso) da caixa de mensagem (para as capturas). */
     String statusHint() {
         return statusHint;
     }
@@ -443,15 +475,18 @@ public class TablePanel extends JPanel {
     /**
      * Ordem de desenho, de trás para frente: primeiro as cartas paradas em suas áreas
      * (só o topo das pilhas), depois as que estão viajando entre áreas, para nunca
-     * passarem por baixo das outras.
+     * passarem por baixo das outras. Na mão, as selecionadas vêm por cima das vizinhas, para aparecerem inteiras.
      */
     private List<CardSprite> paintOrder() {
         List<CardSprite> order = new ArrayList<>();
         for (Zone zone : Zone.values()) {
             List<CardSprite> cards = zones.get(zone);
             for (int i = 0; i < cards.size(); i++) {
-                if (zone.isVisible(cards, i) && !cards.get(i).isFlying()) order.add(cards.get(i));
+                if (zone.isVisible(cards, i) && !cards.get(i).isFlying() && !isRaised(cards.get(i))) order.add(cards.get(i));
             }
+        }
+        for (CardSprite sprite : zones.get(Zone.HAND)) {
+            if (isRaised(sprite)) order.add(sprite);
         }
         for (Zone zone : Zone.values()) {
             for (CardSprite sprite : zones.get(zone)) {
@@ -524,7 +559,7 @@ public class TablePanel extends JPanel {
         for (CardSprite sprite : zones.get(Zone.GOODS)) {
             piles.computeIfAbsent(sprite.getGroup(), k -> new ArrayList<>()).add(sprite);
         }
-        g.setFont(getFont().deriveFont(Font.BOLD, 14f));
+        g.setFont(Hud.heavy(14f));
         for (List<CardSprite> goods : piles.values()) {
             if (goods.getLast().isFlying()) continue;
             Rectangle top = goods.getLast().getHitBounds();
@@ -569,6 +604,19 @@ public class TablePanel extends JPanel {
         return held;
     }
 
+    /** Carta selecionada parada na mão: desenhada por cima das vizinhas, com contorno dourado. */
+    private static boolean isRaised(CardSprite sprite) {
+        return sprite.getZone() == Zone.HAND && sprite.getCard().isSelected() && !sprite.isFlying();
+    }
+
+    private static void drawRaisedOutline(Graphics2D g, CardSprite sprite) {
+        Rectangle r = sprite.getBounds();
+        g.setStroke(new BasicStroke(3f));
+        g.setColor(Hud.GOLD);
+        g.drawRoundRect(r.x - 2, r.y - 2, r.width + 3, r.height + 3, 10, 10);
+        g.setStroke(new BasicStroke(1f));
+    }
+
     private static boolean isHeld(CardSprite sprite) {
         return sprite != null && sprite.getZone() == Zone.BUILDINGS && !sprite.isFlying();
     }
@@ -592,10 +640,10 @@ public class TablePanel extends JPanel {
             Badge badge = list.get(i);
             int y = r.y + r.height - h - 8 - i * (h + 4);
             float size = 13f;
-            g.setFont(getFont().deriveFont(Font.BOLD, size));
+            g.setFont(Hud.bold(size));
             while (size > 9f && g.getFontMetrics().stringWidth(badge.text()) > w - 6) {
                 size -= 1f;
-                g.setFont(getFont().deriveFont(Font.BOLD, size));
+                g.setFont(Hud.bold(size));
             }
             g.setColor(badge.color());
             g.fillRoundRect(x, y, w, h, 10, 10);
@@ -623,29 +671,49 @@ public class TablePanel extends JPanel {
         return -1;
     }
 
-    /** Fichas da lateral: título em negrito, info alinhada à direita e as cores exigidas em quadradinhos. */
+    /** Fichas da lateral: número, custo (moeda), pontos (escudo) e as cores exigidas; acendem sob o mouse se clicáveis. */
     private void drawTiles(Graphics2D g) {
         for (int i = 0; i < tiles.size(); i++) {
             Tile tile = tiles.get(i);
             Rectangle r = tileBounds(i);
-            g.setColor(tile.color());
-            g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+            boolean hover = mouse != null && result == null && r.contains(mouse) && tileClickable.test(i);
+            Hud.panel(g, r, 12, blend(tile.color(), Color.WHITE, hover ? 0.35f : 0.15f), tile.color(),
+                    new Color(255, 255, 255, hover ? 210 : 70));
             g.setColor(Color.WHITE);
-            g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
-            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-            g.drawString(tile.title(), r.x + TILE_PAD, r.y + 15);
-            g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
-            int iw = g.getFontMetrics().stringWidth(tile.info());
-            g.drawString(tile.info(), r.x + r.width - TILE_PAD - iw, r.y + 15);
+            g.setFont(Hud.heavy(14f));
+            g.drawString(tile.title(), r.x + TILE_PAD, r.y + 17);
+
+            g.setFont(Hud.bold(13f));
+            FontMetrics fm = g.getFontMetrics();
+            String points = String.valueOf(tile.points());
+            String cost = String.valueOf(tile.cost());
+            int x = r.x + r.width - TILE_PAD - fm.stringWidth(points);
+            g.setColor(Color.WHITE);
+            g.drawString(points, x, r.y + 17);
+            x -= 17;
+            Hud.Icon.SHIELD.draw(g, x, r.y + 5, 13);
+            x -= 10 + fm.stringWidth(cost);
+            g.setColor(Color.WHITE);
+            g.drawString(cost, x, r.y + 17);
+            x -= 17;
+            Hud.Icon.COIN.draw(g, x, r.y + 5, 13);
+
             int cx = r.x + TILE_PAD;
             for (Color chip : tile.chips()) {
                 g.setColor(chip);
-                g.fillRoundRect(cx, r.y + 21, 14, 9, 4, 4);
-                g.setColor(Color.WHITE);
-                g.drawRoundRect(cx, r.y + 21, 14, 9, 4, 4);
-                cx += 18;
+                g.fillRoundRect(cx, r.y + 24, 16, 9, 9, 9);
+                g.setColor(new Color(255, 255, 255, 170));
+                g.drawRoundRect(cx, r.y + 24, 16, 9, 9, 9);
+                cx += 20;
             }
         }
+    }
+
+    /** Mistura a com b (fração de b entre 0 e 1), mantendo a transparência de a. */
+    private static Color blend(Color a, Color b, float f) {
+        return new Color(Math.round(a.getRed() + (b.getRed() - a.getRed()) * f),
+                Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * f),
+                Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * f), a.getAlpha());
     }
 
     /**
@@ -675,78 +743,149 @@ public class TablePanel extends JPanel {
         return right;
     }
 
-    /** Dicas em itens, quebradas na largura; o que não cabe na altura é cortado com "...". */
+    /**
+     * Dicas em itens, na maior fonte (de 15 a 11) em que todas cabem: o quadro ocupa a coluna até embaixo.
+     * Se nem a menor fonte basta, o que não cabe na altura é cortado com "...".
+     */
     private void drawTips(Graphics2D g) {
         Rectangle area = tipsBounds();
         if (tips.isEmpty() || area.height < TIPS_MIN_HEIGHT) return;
-        g.setFont(opponentFont());
+        int textWidth = area.width - 2 * TIPS_PAD - TIPS_BULLET;
+        int room = area.height - TIPS_HEADER - TIPS_PAD;
+        float size = TIPS_MAX_FONT;
+        List<List<String>> wrapped;
+        while (true) {
+            FontMetrics fm = g.getFontMetrics(Hud.semibold(size));
+            wrapped = tips.stream().map(tip -> wrap(fm, tip, textWidth)).toList();
+            int lines = wrapped.stream().mapToInt(List::size).sum();
+            if (lines * tipLine(size) + (tips.size() - 1) * TIPS_ITEM_GAP <= room || size <= TIPS_MIN_FONT) break;
+            size -= 0.5f;
+        }
+
+        Hud.panel(g, area, new Color(255, 255, 255, 50));
+        Hud.Icon.BULB.draw(g, area.x + TIPS_PAD, area.y + 9, 17);
+        g.setFont(Hud.title(15f));
+        g.setColor(Hud.GOLD);
+        g.drawString("Dicas", area.x + TIPS_PAD + 24, area.y + 23);
+        g.setFont(Hud.regular(12f));
+        String rules = "regras completas";
+        int rx = area.x + area.width - TIPS_PAD - g.getFontMetrics().stringWidth(rules);
+        g.setColor(Hud.SOFT);
+        g.drawString(rules, rx, area.y + 22);
+        Hud.keycap(g, "H", rx - 6 - Hud.keycapWidth(g, "H"), area.y + 23);
+        g.setColor(new Color(255, 255, 255, 30));
+        g.drawLine(area.x + TIPS_PAD, area.y + TIPS_HEADER - 8, area.x + area.width - TIPS_PAD, area.y + TIPS_HEADER - 8);
+
+        g.setFont(Hud.semibold(size));
         FontMetrics fm = g.getFontMetrics();
-        int bullet = 10;
-        List<String> lines = new ArrayList<>();
-        List<Boolean> starts = new ArrayList<>(); // a linha começa um item (leva o marcador)
-        for (String tip : tips) {
-            List<String> wrapped = wrap(fm, tip, area.width - 12 - bullet);
-            for (int i = 0; i < wrapped.size(); i++) {
-                lines.add(wrapped.get(i));
-                starts.add(i == 0);
+        int line = tipLine(size);
+        int bottom = area.y + area.height - TIPS_PAD;
+        int y = area.y + TIPS_HEADER + fm.getAscent();
+        for (List<String> tip : wrapped) {
+            if (y + fm.getDescent() > bottom) break;
+            g.setColor(Hud.GOLD);
+            g.fillOval(area.x + TIPS_PAD + 1, y - fm.getAscent() / 2 - 3, 6, 6);
+            g.setColor(Color.WHITE);
+            for (int i = 0; i < tip.size(); i++) {
+                String text = tip.get(i);
+                boolean lastFitting = y + line + fm.getDescent() > bottom;
+                if (lastFitting && (i < tip.size() - 1 || tip != wrapped.getLast())) {
+                    g.drawString(ellipsize(fm, text + " ...", textWidth), area.x + TIPS_PAD + TIPS_BULLET, y);
+                    return;
+                }
+                g.drawString(text, area.x + TIPS_PAD + TIPS_BULLET, y);
+                y += line;
             }
-        }
-        int fit = Math.max(0, (area.height - 25) / LINE_HEIGHT);
-        int shown = Math.min(fit, lines.size());
-        if (shown < lines.size() && shown > 0) {
-            lines.set(shown - 1, ellipsize(fm, lines.get(shown - 1) + " ...", area.width - 12 - bullet));
-        }
-        int h = 20 + shown * LINE_HEIGHT + 5;
-        g.setColor(new Color(0, 0, 0, 90));
-        g.fillRoundRect(area.x, area.y, area.width, h, 10, 10);
-        g.setColor(new Color(0xC8E6C9));
-        g.drawRoundRect(area.x, area.y, area.width, h, 10, 10);
-        g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-        g.drawString("Dicas", area.x + 6, area.y + 15);
-        g.setFont(opponentFont());
-        String help = "H: regras completas";
-        g.drawString(help, area.x + area.width - 6 - fm.stringWidth(help), area.y + 15);
-        g.setColor(Color.WHITE);
-        for (int i = 0; i < shown; i++) {
-            int y = area.y + 20 + (i + 1) * LINE_HEIGHT - 2;
-            if (starts.get(i)) g.drawString("•", area.x + 6, y);
-            g.drawString(lines.get(i), area.x + 6 + bullet, y);
+            y += TIPS_ITEM_GAP;
         }
     }
 
-    private Font opponentFont() {
-        return getFont().deriveFont(Font.PLAIN, 11f);
+    private static int tipLine(float size) {
+        return Math.round(size * 1.35f);
     }
 
-    /** Caixas dos oponentes, uma embaixo da outra, abaixo da pilha de compras. */
+    /** Caixas dos oponentes, uma embaixo da outra, abaixo da pilha de compras (a linha "última vez" só se houver). */
     private List<Rectangle> opponentBounds() {
         List<Rectangle> bounds = new ArrayList<>();
         int y = Zone.BELOW_PILES;
         for (OpponentView view : opponents) {
-            int h = 20 + view.lines().size() * LINE_HEIGHT + 5;
+            int h = OPPONENT_HEAD + OPPONENT_STATS + (view.last() != null ? OPPONENT_LAST : 0) + 6;
             bounds.add(new Rectangle(OPPONENT_X, y, OPPONENT_WIDTH, h));
             y += h + OPPONENT_GAP;
         }
         return bounds;
     }
 
-    /** Caixas resumidas dos oponentes: cada linha é cortada na largura (o detalhe aparece ao passar o mouse). */
+    /**
+     * Caixas dos oponentes: avatar com a inicial, nome e marcas (inicial, carta a construir), os números com
+     * ícones e o que fez por último. O detalhe aparece ao passar o mouse.
+     */
     private void drawOpponents(Graphics2D g) {
         List<Rectangle> bounds = opponentBounds();
         for (int k = 0; k < opponents.size(); k++) {
             OpponentView view = opponents.get(k);
             Rectangle r = bounds.get(k);
-            g.setColor(new Color(0, 0, 0, 90));
-            g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
-            g.setColor(view.starting() ? new Color(0xFFD54F) : Color.WHITE);
-            g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
-            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-            g.drawString(view.name() + (view.starting() ? "  (inicial)" : ""), r.x + 6, r.y + 15);
+            boolean hover = mouse != null && result == null && r.contains(mouse);
+            Hud.panel(g, r, hover ? Hud.SOFT : new Color(255, 255, 255, 50));
+            if (view.starting()) {
+                g.setColor(Hud.GOLD);
+                g.fillRoundRect(r.x + 1, r.y + 8, 4, r.height - 16, 4, 4);
+            }
+
+            int as = 20;
+            int ax = r.x + 10;
+            int ay = r.y + 5;
+            g.setColor(AVATARS[k % AVATARS.length]);
+            g.fillOval(ax, ay, as, as);
+            g.setColor(new Color(255, 255, 255, 180));
+            g.drawOval(ax, ay, as, as);
+            g.setFont(Hud.heavy(11.5f));
+            FontMetrics fm = g.getFontMetrics();
+            String initial = view.name().isEmpty() ? "?" : view.name().substring(0, 1).toUpperCase();
             g.setColor(Color.WHITE);
-            g.setFont(opponentFont());
-            for (int i = 0; i < view.lines().size(); i++) {
-                String line = ellipsize(g.getFontMetrics(), view.lines().get(i), r.width - 12);
-                g.drawString(line, r.x + 6, r.y + 20 + (i + 1) * LINE_HEIGHT - 2);
+            g.drawString(initial, ax + (as - fm.stringWidth(initial)) / 2 + 1, ay + 15);
+
+            int right = r.x + r.width - 8;
+            Font pillFont = Hud.heavy(10f);
+            List<String> marks = new ArrayList<>();
+            if (view.planning()) marks.add("+1 OBRA");
+            if (view.starting()) marks.add("INICIAL");
+            for (String mark : marks) {
+                int w = g.getFontMetrics(pillFont).stringWidth(mark) + 16;
+                right -= w;
+                boolean start = mark.equals("INICIAL");
+                Hud.pill(g, mark, right, r.y + 7, 16, pillFont, start ? Hud.GOLD : new Color(0x1565C0),
+                        start ? Hud.INK : Color.WHITE);
+                right -= 4;
+            }
+            g.setFont(Hud.bold(14f));
+            g.setColor(Color.WHITE);
+            int nameX = ax + as + 7;
+            g.drawString(ellipsize(g.getFontMetrics(), view.name(), right - nameX - 2), nameX, r.y + 20);
+
+            int sy = r.y + OPPONENT_HEAD;
+            int[] values = {view.points(), view.buildings(), view.coins(), view.hand(), view.assistants()};
+            Hud.Icon[] icons = {Hud.Icon.SHIELD, Hud.Icon.HOUSE, Hud.Icon.COIN, Hud.Icon.CARDS, Hud.Icon.PERSON};
+            g.setColor(new Color(0, 0, 0, 60));
+            g.fillRoundRect(r.x + 6, sy - 2, r.width - 12, OPPONENT_STATS - 2, 8, 8);
+            g.setFont(Hud.heavy(13.5f));
+            FontMetrics nm = g.getFontMetrics();
+            int[] widths = new int[values.length];
+            for (int i = 0; i < values.length; i++) widths[i] = 17 + nm.stringWidth(String.valueOf(values[i]));
+            int x = r.x + 11;
+            for (int i = 0; i < values.length; i++) {
+                icons[i].draw(g, x, sy + 2, 14);
+                g.setColor(Color.WHITE);
+                g.drawString(String.valueOf(values[i]), x + 17, sy + 14);
+                x += widths[i] + spread(r.width - 22, widths, i);
+            }
+
+            if (view.last() != null) {
+                int ly = sy + OPPONENT_STATS + 12;
+                Hud.Icon.PLAY.draw(g, r.x + 10, ly - 8, 8);
+                g.setFont(Hud.semibold(12f));
+                g.setColor(Hud.SOFT);
+                g.drawString(ellipsize(g.getFontMetrics(), view.last(), r.width - 32), r.x + 24, ly);
             }
         }
     }
@@ -759,65 +898,224 @@ public class TablePanel extends JPanel {
             Rectangle r = bounds.get(k);
             if (r.contains(mouse)) {
                 OpponentView view = opponents.get(k);
-                drawPopup(g, view.name(), view.detail(), r.x + r.width + 6, r.y, false);
+                drawPopup(g, view.name(), view.detail(), r.x + r.width + 8, r.y, false);
                 return;
             }
         }
         int tile = tileAt(mouse);
         if (tile >= 0 && !tiles.get(tile).detail().isEmpty()) {
             Rectangle r = tileBounds(tile);
-            drawPopup(g, tiles.get(tile).title(), List.of(tiles.get(tile).detail()), r.x - 6, r.y, true);
+            drawPopup(g, tiles.get(tile).title(), List.of(tiles.get(tile).detail()), r.x - 8, r.y, true);
         }
     }
 
     /** Caixa de detalhe com título e linhas (quebradas em até 340 px); alignRight: x é a borda direita. */
     private void drawPopup(Graphics2D g, String title, List<String> text, int x, int y, boolean alignRight) {
-        g.setFont(opponentFont());
-        FontMetrics fm = g.getFontMetrics();
+        Font body = Hud.regular(12.5f);
+        FontMetrics fm = g.getFontMetrics(body);
+        FontMetrics titleFm = g.getFontMetrics(Hud.bold(14f));
         List<String> lines = new ArrayList<>();
         for (String line : text) lines.addAll(wrap(fm, line, 340));
-        int w = 12 + Math.max(fm.stringWidth(title) + 20, lines.stream().mapToInt(fm::stringWidth).max().orElse(0));
-        int h = 20 + lines.size() * LINE_HEIGHT + 5;
+        int w = 24 + Math.max(titleFm.stringWidth(title) + 20, lines.stream().mapToInt(fm::stringWidth).max().orElse(0));
+        int h = 34 + lines.size() * LINE_HEIGHT;
         int left = alignRight ? x - w : x;
         int top = Math.min(y, getHeight() - h - 4);
-        g.setColor(new Color(20, 20, 20, 235));
-        g.fillRoundRect(left, top, w, h, 10, 10);
+        Rectangle box = new Rectangle(left, top, w, h);
+        Hud.panel(g, box, 12, new Color(26, 30, 28, 245), new Color(14, 18, 16, 245), Hud.GOLD);
+        g.setFont(Hud.bold(14f));
+        g.setColor(Hud.GOLD);
+        g.drawString(title, left + 12, top + 20);
+        g.setColor(new Color(255, 255, 255, 35));
+        g.drawLine(left + 12, top + 27, left + w - 12, top + 27);
+        g.setFont(body);
         g.setColor(Color.WHITE);
-        g.drawRoundRect(left, top, w, h, 10, 10);
-        g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-        g.drawString(title, left + 6, top + 15);
-        g.setFont(opponentFont());
         for (int i = 0; i < lines.size(); i++) {
-            g.drawString(lines.get(i), left + 6, top + 20 + (i + 1) * LINE_HEIGHT - 2);
+            g.drawString(lines.get(i), left + 12, top + 28 + (i + 1) * LINE_HEIGHT - 2);
         }
     }
 
+    // ---------------------------------------------------------- caixa de mensagem
+
+    /** Item da caixa de mensagem: texto, tecla desenhada antes (ou null), ícone (ou null); newRow começa linha nova. */
+    private record MessageItem(String key, String text, Font font, Color color, Hud.Icon icon, boolean newRow) { }
+
+    /** "TECLA: o que faz", como em "ESPAÇO: continuar" (a tecla vira um desenho de tecla). */
+    private static final Pattern KEY_ITEM = Pattern.compile("([A-ZÇ]{1,6}): (.+)");
+    private static final String SEPARATOR = "   \\|   ";
+    private static final int ITEM_GAP = 22;
+
+    private Rectangle counterBox() {
+        return new Rectangle(getWidth() - 16 - COUNTER_WIDTH, HUD_Y, COUNTER_WIDTH, HUD_HEIGHT);
+    }
+
+    private Rectangle messageBox() {
+        return new Rectangle(16, HUD_Y, counterBox().x - 12 - 16, HUD_HEIGHT);
+    }
+
     /**
-     * Barra de status em duas linhas; a 2ª mostra o aviso (amarelo) ou o passo do oponente (azul) quando há.
-     * O contador do jogador fica à direita da 1ª linha.
+     * O que vai na caixa: a narração do oponente; ou o contexto em destaque e depois o aviso (âmbar) ou os
+     * itens do que fazer, numa linha nova.
+     */
+    private List<MessageItem> messageItems() {
+        List<MessageItem> items = new ArrayList<>();
+        if (narration != null) {
+            items.add(new MessageItem(null, narration, Hud.bold(15f), Hud.NARRATION, Hud.Icon.PLAY, true));
+            return items;
+        }
+        if (statusContext != null) {
+            for (String part : statusContext.split(SEPARATOR)) {
+                items.add(new MessageItem(null, part, Hud.bold(15f), Color.WHITE, null, items.isEmpty()));
+            }
+        }
+        if (statusWarning) {
+            String text = statusHint.startsWith(ATTENTION) ? statusHint.substring(ATTENTION.length()) : statusHint;
+            items.add(new MessageItem(null, text, Hud.bold(14.5f), Hud.WARNING, Hud.Icon.ALERT, true));
+            return items;
+        }
+        boolean first = true;
+        for (String part : statusHint.split(SEPARATOR)) {
+            Matcher m = KEY_ITEM.matcher(part);
+            items.add(m.matches()
+                    ? new MessageItem(m.group(1), m.group(2), Hud.semibold(14f), Color.WHITE, null, first)
+                    : new MessageItem(null, part, Hud.semibold(14f), new Color(0xDCEDC8), null, first));
+            first = false;
+        }
+        return items;
+    }
+
+    private static final String ATTENTION = "ATENÇÃO: ";
+
+    private static int itemWidth(Graphics2D g, MessageItem item) {
+        int w = g.getFontMetrics(item.font()).stringWidth(item.text());
+        if (item.key() != null) w += Hud.keycapWidth(g, item.key()) + 6;
+        if (item.icon() != null) w += 20;
+        return w;
+    }
+
+    /**
+     * Caixa de mensagem no alto, como a de um jogo narrado: a etapa numa plaqueta sobre a borda (com as marcas,
+     * ex.: rodada final, ao lado) e até 3 linhas com o contexto e o que fazer. A borda muda de cor na narração
+     * dos oponentes (azul) e nos avisos (âmbar).
      */
     private void drawStatus(Graphics2D g) {
-        int width = getWidth() - 40;
-        g.setColor(new Color(0xFFE082));
-        g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-        int counterWidth = g.getFontMetrics().stringWidth(counter);
-        g.drawString(counter, getWidth() - 20 - counterWidth, 18);
-        g.setColor(Color.WHITE);
-        g.setFont(getFont().deriveFont(Font.BOLD, 14f));
-        String title = narration != null ? narrationTitle : statusTitle;
-        g.drawString(ellipsize(g.getFontMetrics(), title, width - counterWidth - 20), 20, 18);
-        String hint = statusHint;
-        if (narration != null) {
-            g.setColor(new Color(0x90CAF9));
-            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-            hint = "> " + narration;
-        } else if (statusWarning) {
-            g.setColor(new Color(0xFFD54F));
-            g.setFont(getFont().deriveFont(Font.BOLD, 12f));
-        } else {
-            g.setFont(getFont().deriveFont(Font.PLAIN, 12f));
+        boolean narrating = narration != null;
+        Color accent = narrating ? Hud.NARRATION : statusWarning ? Hud.WARNING : Hud.GOLD;
+        Rectangle box = messageBox();
+        Hud.panel(g, box, 16, Hud.PANEL_TOP, Hud.PANEL_BOTTOM, accent);
+
+        String title = narrating ? narrationTitle : statusTitle;
+        g.setFont(Hud.title(13f));
+        FontMetrics fm = g.getFontMetrics();
+        title = ellipsize(fm, title, box.width - 60);
+        Rectangle plate = new Rectangle(box.x + 18, box.y - 10, fm.stringWidth(title) + 24, 21);
+        Hud.panel(g, plate, 21, blend(accent, Color.WHITE, 0.3f), accent, null);
+        g.setColor(Hud.INK);
+        g.drawString(title, plate.x + 12, plate.y + 15);
+        int fx = plate.x + plate.width + 8;
+        if (!narrating) {
+            Font flagFont = Hud.heavy(10.5f);
+            for (String flag : statusFlags) {
+                boolean urgent = flag.equals(flag.toUpperCase());
+                if (fx + g.getFontMetrics(flagFont).stringWidth(flag) + 17 > box.x + box.width - 10) break;
+                fx += Hud.pill(g, flag, fx, plate.y + 2, 17, flagFont, urgent ? new Color(0xC62828) : new Color(0x2E4D3A),
+                        urgent ? Color.WHITE : Hud.GOLD) + 6;
+            }
         }
-        g.drawString(ellipsize(g.getFontMetrics(), hint, width), 20, 37);
+
+        // Posições: cada item segue na mesma linha enquanto couber
+        List<MessageItem> items = messageItems();
+        int left = box.x + 18;
+        int right = box.x + box.width - 16;
+        int[] rows = new int[items.size()];
+        int[] xs = new int[items.size()];
+        int shown = 0;
+        int row = 0;
+        int x = left;
+        for (MessageItem item : items) {
+            int w = itemWidth(g, item);
+            if (x > left && (item.newRow() || x + ITEM_GAP + w > right)) {
+                row++;
+                x = left;
+            } else if (x > left) {
+                x += ITEM_GAP;
+            }
+            if (row >= HUD_ROWS) break;
+            rows[shown] = row;
+            xs[shown] = x;
+            x += w;
+            shown++;
+        }
+        int used = shown == 0 ? 0 : rows[shown - 1] + 1;
+        int contentTop = box.y + 12;
+        int firstBaseline = contentTop + (HUD_HEIGHT - 18 - used * HUD_ROW) / 2 + 14;
+
+        for (int i = 0; i < shown; i++) {
+            MessageItem item = items.get(i);
+            int baseline = firstBaseline + rows[i] * HUD_ROW;
+            int ix = xs[i];
+            if (i > 0 && rows[i - 1] == rows[i]) {
+                g.setColor(new Color(255, 255, 255, 90));
+                g.fillOval(ix - ITEM_GAP / 2 - 2, baseline - 7, 4, 4);
+            }
+            if (item.icon() != null) {
+                item.icon().draw(g, ix, baseline - 13, 14);
+                ix += 20;
+            }
+            if (item.key() != null) ix += Hud.keycap(g, item.key(), ix, baseline) + 6;
+            g.setFont(item.font());
+            g.setColor(item.color());
+            g.drawString(ellipsize(g.getFontMetrics(), item.text(), right - ix), ix, baseline);
+        }
+    }
+
+    /** Painel do jogador: nome, atalho da ajuda e os números (moedas em bens, pontos, cartas) com ícones. */
+    private void drawCounter(Graphics2D g) {
+        Rectangle r = counterBox();
+        Hud.panel(g, r, 16, Hud.PANEL_TOP, Hud.PANEL_BOTTOM, new Color(255, 255, 255, 60));
+        if (counter == null) return;
+        g.setFont(Hud.semibold(12f));
+        String help = "ajuda";
+        int hx = r.x + r.width - 14 - g.getFontMetrics().stringWidth(help);
+        g.setColor(Hud.SOFT);
+        g.drawString(help, hx, r.y + 22);
+        int keyX = hx - 6 - Hud.keycapWidth(g, "H");
+        Hud.keycap(g, "H", keyX, r.y + 23);
+        g.setFont(Hud.title(14f));
+        g.setColor(Hud.GOLD);
+        g.drawString(ellipsize(g.getFontMetrics(), counter.name(), keyX - r.x - 24), r.x + 14, r.y + 22);
+        g.setColor(new Color(255, 255, 255, 30));
+        g.drawLine(r.x + 12, r.y + 31, r.x + r.width - 12, r.y + 31);
+
+        int baseline = r.y + 58;
+        Hud.Icon[] icons = {Hud.Icon.COIN, Hud.Icon.SHIELD, Hud.Icon.CARDS};
+        int[] values = {counter.coins(), counter.points(), counter.cards()};
+        String[] labels = {"em bens", "pontos", "cartas"};
+        FontMetrics nm = g.getFontMetrics(Hud.heavy(21f));
+        FontMetrics lm = g.getFontMetrics(Hud.regular(12f));
+        int[] widths = new int[values.length];
+        for (int i = 0; i < values.length; i++) {
+            widths[i] = 23 + nm.stringWidth(String.valueOf(values[i])) + 4 + lm.stringWidth(labels[i]);
+        }
+        int x = r.x + 14;
+        for (int i = 0; i < values.length; i++) {
+            icons[i].draw(g, x, baseline - 16, 18);
+            g.setFont(Hud.heavy(21f));
+            g.setColor(Color.WHITE);
+            String text = String.valueOf(values[i]);
+            g.drawString(text, x + 23, baseline);
+            g.setFont(Hud.regular(12f));
+            g.setColor(Hud.SOFT);
+            g.drawString(labels[i], x + 23 + nm.stringWidth(text) + 4, baseline);
+            x += widths[i] + spread(r.width - 28, widths, i);
+        }
+    }
+
+    /** Espaço depois do i-ésimo de vários blocos que se espalham por width (igual entre eles; nunca menos de 6). */
+    private static int spread(int width, int[] widths, int i) {
+        if (i == widths.length - 1) return 0;
+        int total = 0;
+        for (int w : widths) total += w;
+        return Math.max(6, (width - total) / (widths.length - 1));
     }
 
     private Rectangle resultPanel() {
@@ -845,11 +1143,9 @@ public class TablePanel extends JPanel {
         g.setColor(new Color(0, 0, 0, 160));
         g.fillRect(0, 0, getWidth(), getHeight());
         Rectangle p = resultPanel();
-        g.setColor(new Color(0x1F3A2A));
-        g.fillRoundRect(p.x, p.y, p.width, p.height, 16, 16);
-        g.setColor(new Color(0xFFD54F));
-        g.drawRoundRect(p.x, p.y, p.width, p.height, 16, 16);
-        g.setFont(getFont().deriveFont(Font.BOLD, 22f));
+        Hud.panel(g, p, 18, new Color(0x24452F), new Color(0x163022), Hud.GOLD);
+        g.setColor(Hud.GOLD);
+        g.setFont(Hud.title(26f));
         g.drawString("Resultado", p.x + 20, p.y + 36);
 
         int y = p.y + 60;
@@ -860,10 +1156,10 @@ public class TablePanel extends JPanel {
         }
         y += RESULT_ROW + 30;
         g.setColor(new Color(0xFFD54F));
-        g.setFont(getFont().deriveFont(Font.BOLD, 18f));
+        g.setFont(Hud.heavy(19f));
         g.drawString(result.winner(), p.x + 20, y);
         g.setColor(Color.WHITE);
-        g.setFont(getFont().deriveFont(Font.PLAIN, 12f));
+        g.setFont(Hud.regular(13f));
         g.drawString(result.note(), p.x + 20, y + 22);
 
         Rectangle[] buttons = resultButtons();
@@ -875,7 +1171,7 @@ public class TablePanel extends JPanel {
             g.fillRoundRect(b.x, b.y, b.width, b.height, 10, 10);
             g.setColor(Color.WHITE);
             g.drawRoundRect(b.x, b.y, b.width, b.height, 10, 10);
-            g.setFont(getFont().deriveFont(Font.BOLD, 14f));
+            g.setFont(Hud.bold(15f));
             int tw = g.getFontMetrics().stringWidth(labels[i]);
             g.drawString(labels[i], b.x + (b.width - tw) / 2, b.y + 24);
         }
@@ -884,7 +1180,7 @@ public class TablePanel extends JPanel {
     /** Uma linha da tabela de resultado; as colunas de número (da 3ª em diante) ficam à direita. */
     private void drawResultRow(Graphics2D g, List<String> cells, int x, int y, boolean header) {
         g.setColor(header ? new Color(0xC8E6C9) : Color.WHITE);
-        g.setFont(getFont().deriveFont(header ? Font.BOLD : Font.PLAIN, 13f));
+        g.setFont(header ? Hud.bold(13.5f) : Hud.semibold(13.5f));
         int cx = x;
         for (int c = 0; c < cells.size() && c < RESULT_COLUMNS.length; c++) {
             String text = ellipsize(g.getFontMetrics(), cells.get(c), RESULT_COLUMNS[c] - 8);
@@ -924,11 +1220,13 @@ public class TablePanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g); // pinta o fundo
         Graphics2D g2 = (Graphics2D) g.create();
-        for (CardSprite sprite : paintOrder()) {
-            sprite.draw(g2);
-        }
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+        for (CardSprite sprite : paintOrder()) {
+            sprite.draw(g2);
+            if (isRaised(sprite)) drawRaisedOutline(g2, sprite);
+        }
         drawGoodsCount(g2);
         CardSprite hovered = hoveredBuilding();
         drawBadges(g2, hovered);
@@ -940,6 +1238,7 @@ public class TablePanel extends JPanel {
         drawTips(g2);
         drawOpponents(g2);
         drawStatus(g2);
+        drawCounter(g2);
         drawHover(g2);
         drawResult(g2);
         g2.dispose();

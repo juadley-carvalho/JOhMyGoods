@@ -119,8 +119,8 @@ public enum Zone {
     };
 
     private static final int SIDE = 50;
-    /** Onde começam as cartas: acima fica a barra de status (2 linhas). */
-    public static final int TOP = 46;
+    /** Onde começam as cartas: acima ficam a caixa de mensagem e o painel do jogador. */
+    public static final int TOP = 92;
     /** Logo abaixo das pilhas de compra e descarte: onde começam as colunas dos oponentes e dos assistentes. */
     public static final int BELOW_PILES = TOP + CardSprite.HEIGHT + 10;
     /** Largura reservada de cada lado da 2ª fileira do mercado para as colunas laterais. */

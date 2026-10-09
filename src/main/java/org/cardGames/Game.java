@@ -93,7 +93,7 @@ public class Game {
         }
 
         /**
-         * O passo aparece na barra de status quando as cartas dele começam a se mover, junto com o resumo
+         * O passo aparece na caixa de mensagem quando as cartas dele começam a se mover, junto com o resumo
          * dos oponentes de logo depois dele; depois, uma pausa.
          */
         @Override
@@ -636,7 +636,7 @@ public class Game {
     /**
      * Fase IV dos oponentes, na ordem do turno: before=true joga os que vêm antes do humano
      * (a partir do jogador inicial), before=false os que vêm depois. Quem joga antes tem
-     * prioridade para contratar um assistente. Cada passo deles aparece na barra de status, com uma pausa.
+     * prioridade para contratar um assistente. Cada passo deles aparece na caixa de mensagem, com uma pausa.
      */
     private void playOpponents(boolean before) {
         List<Player> order = state.turnOrder();
@@ -775,7 +775,7 @@ public class Game {
         clock += STEP_MS;
     }
 
-    /** Barra de status: 1ª linha com a etapa e o que está em jogo; 2ª com as teclas ou o aviso. */
+    /** Caixa de mensagem: a etapa (com as marcas da rodada), o que está em jogo e as teclas ou o aviso. */
     private void updateStatus() {
         String context = null;
         String hint = phase.hint;
@@ -823,9 +823,10 @@ public class Game {
         boolean warned = warning != null;
         if (warned) hint = "ATENÇÃO: " + warning;
         warning = null;
-        String flags = (state.isFinalRound() && !state.isGameOver() ? " (RODADA FINAL)" : "")
-                + (state.startingPlayer() == player ? " (você é o inicial)" : "");
-        table.setStatus(title + flags + (context != null ? "   |   " + context : ""), hint, warned);
+        List<String> flags = new java.util.ArrayList<>();
+        if (state.isFinalRound() && !state.isGameOver()) flags.add("RODADA FINAL");
+        if (state.startingPlayer() == player) flags.add("você é o inicial");
+        table.setStatus(title, flags, context, hint, warned);
         table.setTips(tips());
         refreshInfo();
         refreshBadges();
@@ -918,14 +919,13 @@ public class Game {
         boolean revealed = phase != Phase.NEW_HAND && phase != Phase.SUNRISE && phase != Phase.PLAN && phase != Phase.MOVE;
         for (Player opponent : state.opponents()) {
             Scoring.Score score = Scoring.score(opponent);
-            List<String> lines = new java.util.ArrayList<>();
-            lines.add(score.total() + " pts · " + opponent.getBuildings().size() + " estab. · " + score.coins() + " moedas");
-            lines.add("mão " + opponent.getHand().size() + " · " + opponent.getAssistants().size() + " assist."
-                    + (revealed && opponent.getPlannedBuilding() != null ? " · +1 a construir" : ""));
             String last = lastTurn.get(opponent);
-            if (last != null) lines.add("> " + last.substring(opponent.getName().length() + 2));
+            boolean planning = revealed && opponent.getPlannedBuilding() != null;
 
             List<String> detail = new java.util.ArrayList<>();
+            detail.add(score.total() + " pontos · " + opponent.getBuildings().size() + " estabelecimentos · "
+                    + score.coins() + " moedas em bens · " + opponent.getHand().size() + " cartas na mão · "
+                    + opponent.getAssistants().size() + " assistentes" + (planning ? " · 1 carta a construir" : ""));
             for (Building b : opponent.getBuildings()) {
                 detail.add(b.getCard().getName()
                         + (revealed && b.getPerson() instanceof Worker w
@@ -938,16 +938,18 @@ public class Game {
                     + score.goodsPoints() + " bens");
             if (last != null) detail.add("última vez: " + last.substring(opponent.getName().length() + 2));
             detail.add("* atento   ~ distraído   + assistente");
-            views.add(new TablePanel.OpponentView(opponent.getName(), opponent == state.startingPlayer(), lines, detail));
+            views.add(new TablePanel.OpponentView(opponent.getName(), opponent == state.startingPlayer(), planning,
+                    score.total(), opponent.getBuildings().size(), score.coins(), opponent.getHand().size(),
+                    opponent.getAssistants().size(), last == null ? null : last.substring(opponent.getName().length() + 2),
+                    detail));
         }
         return views;
     }
 
-    /** Contador (à direita na barra de status): moedas em bens (o que vale para pagar e para pontuar), pontos e cartas na mão. */
+    /** Painel do jogador (canto superior direito): moedas em bens (o que vale para pagar e para pontuar), pontos e cartas na mão. */
     private void refreshInfo() {
         Scoring.Score score = Scoring.score(player);
-        table.setCounter(player.getName() + ":  " + score.coins() + " moedas em bens   |   " + score.total() + " pts   |   "
-                + player.getHand().size() + " cartas   |   H: ajuda");
+        table.setCounter(new TablePanel.CounterView(player.getName(), score.coins(), score.total(), player.getHand().size()));
     }
 
     private String describePerson(Building building) {
@@ -958,7 +960,7 @@ public class Game {
     private void refreshAssistants() {
         table.setTiles(state.availableAssistants().stream().map(a -> new TablePanel.Tile(
                 "#" + a.getNumber(),
-                "custo " + a.getCost() + " · " + a.getPoints() + " pts",
+                a.getCost(), a.getPoints(),
                 a + ": custo " + a.getCost() + ", " + a.getPoints() + " pontos; exige " + describeColors(a),
                 a.getRequiredColors().stream().map(Game::chipColor).toList(),
                 a == toHire ? PAYMENT_COLOR : player.hasColorsFor(a) ? HIREABLE_COLOR : UNAVAILABLE_COLOR)).toList());

@@ -196,6 +196,7 @@ public final class Snapshots {
         act(() -> table.press(human.getCharcoalBurner().getCard()));
         Card planned = human.getHand().getFirst();
         act(() -> table.press(planned));
+        shot("2d-carta-selecionada");  // a 1ª da mão, a mais coberta: selecionada, aparece inteira
         act(game::planSelected);
         shot("3-planejado");
         act(game::advance);           // fim do planejamento

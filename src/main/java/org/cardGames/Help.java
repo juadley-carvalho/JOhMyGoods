@@ -61,7 +61,7 @@ public final class Help {
             + use("Detalhes", "passe o mouse sobre um oponente ou um assistente.")
             + "</table>"
             + "<h2>Na mesa</h2>"
-            + "<p>A barra de cima diz a etapa e o que fazer; no canto direito, suas moedas em bens, pontos e "
+            + "<p>A caixa de mensagem no alto diz a etapa e o que fazer (as teclas aparecem desenhadas); no canto direito, suas moedas em bens, pontos e "
             + "cartas na mão. O quadro <b>Dicas</b>, à direita, explica as opções da etapa.</p>"
             + "<p class='note'><b>Exaustão:</b> quando compras e descarte acabam, escolha na mão metade das cartas "
             + "para descartar e aperte ESPAÇO.</p>"
@@ -69,7 +69,7 @@ public final class Help {
 
     /** Linha de definição: termo em destaque e explicação. */
     private static String use(String term, String text) {
-        return "<tr><td valign='top' class='term' width='112' nowrap>" + term + "</td>"
+        return "<tr><td valign='top' class='term' width='124' nowrap>" + term + "</td>"
                 + "<td valign='top' class='def'>" + text + "</td></tr>";
     }
 

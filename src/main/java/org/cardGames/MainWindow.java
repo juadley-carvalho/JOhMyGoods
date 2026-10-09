@@ -19,6 +19,7 @@ public class MainWindow extends JFrame {
 
     public MainWindow(Function<List<String>, GameState> newGame) {
         super("Oh My Goods!");
+        Hud.install();
         this.newGame = newGame;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
