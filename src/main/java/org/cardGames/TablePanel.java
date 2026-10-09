@@ -71,6 +71,7 @@ public class TablePanel extends JPanel {
     private Runnable onExit = () -> { };
 
     private List<OpponentView> opponents = List.of();
+    private CardSprite held; // estabelecimento destacado: continua destacado enquanto o mouse estiver na área inteira dele
     private List<String> tips = List.of(); // quadro de dicas da etapa, abaixo dos assistentes
 
     private static final int TIPS_GAP = 10;
@@ -460,8 +461,12 @@ public class TablePanel extends JPanel {
         return order;
     }
 
-    /** A carta mais "por cima" sob o ponto, ou null. */
+    /**
+     * A carta mais "por cima" sob o ponto, ou null. O estabelecimento destacado (desenhado inteiro, por cima
+     * dos vizinhos) vem primeiro em toda a área dele, para o clique ir para a carta que aparece.
+     */
     private CardSprite topCardAt(Point p) {
+        if (isHeld(held) && held.getHitBounds().contains(p)) return held;
         List<CardSprite> order = paintOrder();
         for (int i = order.size() - 1; i >= 0; i--) {
             if (order.get(i).getHitBounds().contains(p)) {
@@ -555,9 +560,17 @@ public class TablePanel extends JPanel {
      * sobrepõem (os bens dele continuam atrás, aparecendo em cima).
      */
     private CardSprite hoveredBuilding() {
-        if (mouse == null || result != null) return null;
+        if (mouse == null || result != null) {
+            held = null;
+            return null;
+        }
         CardSprite sprite = topCardAt(mouse);
-        return sprite != null && sprite.getZone() == Zone.BUILDINGS && !sprite.isFlying() ? sprite : null;
+        held = isHeld(sprite) ? sprite : null;
+        return held;
+    }
+
+    private static boolean isHeld(CardSprite sprite) {
+        return sprite != null && sprite.getZone() == Zone.BUILDINGS && !sprite.isFlying();
     }
 
     /** Etiquetas de todas as cartas, menos a do estabelecimento sob o mouse (desenhadas depois dele). */

@@ -71,6 +71,29 @@ class ProductionTest {
     }
 
     @Test
+    void previsaoContaOMercadoEAsCartasDaMao() {
+        market(Resource.LA, Resource.LA, Resource.MADEIRA);
+        Card kept = hand(Resource.LA);
+        player.placeWorker(charcoal);
+
+        Production.Forecast onlyMarket = Production.forecast(player, market);
+        assertEquals(2 * charcoal.getCard().getGoodValue(), onlyMarket.free());
+        assertEquals(0, onlyMarket.withHand());
+        assertEquals(List.of(kept), onlyMarket.handLeft());
+
+        Market partial = new Market();
+        partial.addSunrise(resource(Resource.LA));
+        hand(Resource.LA);
+        Card wood = hand(Resource.MADEIRA);
+        Production.Forecast withHand = Production.forecast(player, partial);
+        assertEquals(0, withHand.free());
+        assertEquals(2 * charcoal.getCard().getGoodValue(), withHand.withHand());
+        assertEquals(2, withHand.used().size(), "1 lã e 1 madeira da mão completam a Carvoaria");
+        assertEquals(1, withHand.handLeft().size());
+        assertFalse(withHand.handLeft().contains(wood));
+    }
+
+    @Test
     void atentoComMercadoCompletoProduz2SemGastarCartas() {
         market(Resource.LA, Resource.LA, Resource.MADEIRA);
         Card kept = hand(Resource.LA);

@@ -70,6 +70,7 @@ public class Game {
     private final java.util.Deque<Building> producers = new java.util.ArrayDeque<>(); // fila da produção; o primeiro produz agora
     private final java.util.Map<Resource, Building> chainSources = new java.util.EnumMap<>(Resource.class); // origem escolhida dos bens da cadeia
     private final java.util.Map<Player, String> lastTurn = new java.util.HashMap<>(); // resumo da última vez de cada oponente
+    private Player current; // oponente jogando a Fase IV agora (o resumo dele muda a cada passo)
     private boolean finalChains; // rodada final: as cadeias de todos os estabelecimentos já entraram na fila
     private int discarding;     // exaustão: quantas cartas o humano precisa escolher para descartar (0 = nenhuma)
     private SecondaryLoop exhaustionLoop; // segura a ação em andamento enquanto o humano escolhe
@@ -96,7 +97,8 @@ public class Game {
          * dos oponentes de logo depois dele; depois, uma pausa.
          */
         @Override
-        public void step(String text) {
+        public void step(String text, String summary) {
+            if (current != null) lastTurn.put(current, summary);
             table.narrate("Fase IV - vez dos oponentes", text, opponentViews(), stepStart);
             clock = Math.max(clock, stepStart) + BOT_PAUSE_MS;
             stepStart = clock;
@@ -642,8 +644,10 @@ public class Game {
         List<Player> turn = before ? order.subList(0, human) : order.subList(human + 1, order.size());
         for (Player opponent : turn) {
             stepStart = clock;
+            current = opponent;
             lastTurn.put(opponent, Bot.playTurn(opponent, state, botTable));
         }
+        current = null;
     }
 
     /**
@@ -839,14 +843,20 @@ public class Game {
         int coins = Scoring.score(player).coins();
         switch (phase) {
             case PLAN -> {
-                int guaranteed = guaranteedCoins();
-                List<String> affordable = player.getHand().stream().filter(c -> c.getCost() <= coins + guaranteed)
+                Production.Forecast forecast = Production.forecast(player, market);
+                int guaranteed = forecast.free() + forecast.withHand();
+                List<String> affordable = forecast.handLeft().stream().filter(c -> c.getCost() <= coins + guaranteed)
                         .map(c -> c.getName() + " (" + c.getCost() + ")").toList();
-                tips.add("Seus bens valem " + coins + " moedas" + (guaranteed == 0 ? ". "
-                        : "; a produção já garante +" + guaranteed + " (com o mercado e as guildas). ")
+                String produced = (forecast.free() == 0 ? "" : "; a produção já garante +" + forecast.free()
+                        + " (com o mercado e as guildas)")
+                        + (forecast.withHand() == 0 ? "" : (forecast.free() == 0 ? "; a produção dá +" : " e dá +")
+                        + forecast.withHand() + " gastando da mão " + String.join(", ",
+                                forecast.used().stream().map(Card::getName).toList()));
+                tips.add("Seus bens valem " + coins + " moedas" + produced + ". "
                         + (affordable.isEmpty()
-                        ? "Nenhuma carta da mão cabe nisso ainda; o que a mão completar na produção também vai contar."
-                        : "Já cabem: " + String.join(", ", affordable) + "."));
+                        ? "Nenhuma carta da mão cabe nisso ainda."
+                        : "Já cabem" + (forecast.used().isEmpty() ? "" : " (sem as cartas gastas)") + ": "
+                                + String.join(", ", affordable) + "."));
                 if (!player.getAssistants().isEmpty()) {
                     tips.add("Clique num assistente e depois num estabelecimento livre para mudá-lo ("
                             + Player.MOVE_ASSISTANT_COST + " moedas).");
@@ -938,16 +948,6 @@ public class Game {
         Scoring.Score score = Scoring.score(player);
         table.setCounter(player.getName() + ":  " + score.coins() + " moedas em bens   |   " + score.total() + " pts   |   "
                 + player.getHand().size() + " cartas   |   H: ajuda");
-    }
-
-    /**
-     * Moedas que a produção desta rodada já garante: estabelecimentos ocupados que produzem só com o
-     * mercado e as guildas, sem gastar cartas da mão (o mercado só cresce até a produção).
-     */
-    private int guaranteedCoins() {
-        java.util.Map<Resource, Integer> free = Production.freeResources(player, market);
-        return player.producingBuildings().stream()
-                .mapToInt(b -> Production.goods(b, free, List.of()) * b.getCard().getGoodValue()).sum();
     }
 
     private String describePerson(Building building) {

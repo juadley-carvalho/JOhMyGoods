@@ -231,6 +231,8 @@ public final class Snapshots {
                 Rectangle covered = table.cardArea(human.getBuildings().get(2).getCard());
                 table.hoverAt(covered.x + 20, covered.y + covered.height - 20);
                 shot("1b-estabelecimento-inteiro");
+                table.hoverAt(covered.x + covered.width - 5, covered.y + covered.height - 20); // parte que estava coberta
+                shot("1c-estabelecimento-segue");
                 table.hoverAt(-1, -1);
             }
             act(game::advance);

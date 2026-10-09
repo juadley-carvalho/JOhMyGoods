@@ -78,6 +78,36 @@ public final class Production {
         return canProduce(building.getCard(), free, handCards, person.missingAllowed()) ? person.goodsProduced() : 0;
     }
 
+    /**
+     * Previsão da produção no planejamento: free = moedas dos estabelecimentos ocupados que produzem só com
+     * o mercado e as guildas; withHand = moedas dos que as cartas da mão completam (used, gastas na ordem da
+     * fila de produção); handLeft = o que sobra na mão. A 2ª fileira do mercado, ainda fechada, não entra.
+     */
+    public record Forecast(int free, int withHand, List<Card> used, List<Card> handLeft) { }
+
+    public static Forecast forecast(Player owner, Market market) {
+        Map<Resource, Integer> free = freeResources(owner, market);
+        int freeCoins = 0;
+        int handCoins = 0;
+        List<Card> left = new ArrayList<>(owner.getHand());
+        List<Card> used = new ArrayList<>();
+        for (Building building : owner.producingBuildings()) {
+            int value = building.getCard().getGoodValue();
+            int goods = goods(building, free, List.of());
+            if (goods > 0) {
+                freeCoins += goods * value;
+                continue;
+            }
+            List<Card> cards = cardsToUse(building.getCard(), free, left, building.getPerson().missingAllowed());
+            goods = goods(building, free, cards);
+            if (goods == 0) continue;
+            handCoins += goods * value;
+            cards.forEach(left::remove);
+            used.addAll(cards);
+        }
+        return new Forecast(freeCoins, handCoins, List.copyOf(used), List.copyOf(left));
+    }
+
     // ------------------------------------------------------- cadeia de produção (manual p. 8)
 
     /**

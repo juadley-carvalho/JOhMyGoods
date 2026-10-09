@@ -100,6 +100,7 @@ class RoundTest {
         Player bot = state.opponents().getFirst();
         Deck deck = state.deck();
         List<String> steps = new ArrayList<>();
+        List<String> summaries = new ArrayList<>();
         Bot.Table table = new Bot.Table() {
             @Override
             public Card draw() {
@@ -113,14 +114,21 @@ class RoundTest {
             }
 
             @Override
-            public void step(String text) {
+            public void step(String text, String summary) {
                 steps.add(text);
+                summaries.add(summary);
             }
         };
         openRow(state, table, true);
         Bot.plan(bot, state.market());
         openRow(state, table, false);
-        Bot.playTurn(bot, state, table);
+        String summary = Bot.playTurn(bot, state, table);
+
+        // o resumo acompanha cada passo; o do último é o da vez inteira
+        assertEquals(steps.size(), summaries.size());
+        summaries.subList(0, summaries.size() - 1).forEach(s ->
+                assertTrue(s.startsWith(bot.getName() + ": ") && s.endsWith(" até agora"), s));
+        assertEquals(summary, summaries.getLast());
 
         assertTrue(steps.size() >= 2, "produção e construção: " + steps);
         assertTrue(steps.getFirst().startsWith(bot.getName() + " · CARVOARIA: "), steps.getFirst());

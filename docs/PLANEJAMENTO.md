@@ -268,6 +268,18 @@ Testes novos em `ChainTest` (origem do couro com dois Curtumes), `BuildTest` (de
 
 ---
 
+## Fase 14 — Pendentes da análise resolvidos com código
+
+**Objetivo:** fechar os três pontos que a análise de 09/10/2026 apontou como resolvíveis só com código.
+
+- [x] Linha "última vez" dos oponentes: `Bot.Table.step(texto, resumo)` leva o resumo da vez até aquele passo ("Jogador 2: 3 bens até agora"); no último passo, o resumo da vez inteira. A linha "> ..." e o detalhe mudam junto com os números.
+- [x] Estabelecimento inteiro sob o mouse: o destacado continua destacado (e recebe o clique) enquanto o mouse estiver na área inteira dele, inclusive na parte que estava coberta pelo vizinho.
+- [x] Produção prevista no planejamento: `Production.forecast` soma, além do que o mercado e as guildas garantem, a produção que as cartas da mão completam (na ordem da fila de produção); a dica diz quais cartas seriam gastas e "Já cabem" passa a considerar só as que sobram.
+
+**Validação:** testes passam (86; novos em `RoundTest` — resumo a cada passo — e `ProductionTest` — previsão com mercado e com a mão); captura `*-cheia-1c-estabelecimento-segue` (mouse na parte antes coberta) sai igual à `1b`; `4j-7-oponentes-jogando` mostra "> 2 bens até agora".
+
+---
+
 ## Pontos de atenção
 
 Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *Concluídos* com a resolução.
@@ -278,14 +290,27 @@ Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *
 - **(Fase 6) Sem imagem de assistente:** fichas desenhadas (número, custo, pontos, cores). Ver *Decisões em aberto*, item 2.
 - **(Fase 7) IA simples:** o oponente nunca troca a mão, nunca move assistentes, oferece a mão inteira na produção e usa as cadeias até acabar (pode gastar cartas/bens que valeriam mais guardados). Suficiente para testar o fluxo; melhorar se ficar fácil demais.
 - **(Fase 9) Validação:** testes e `.jar` conferidos (o jar lê banco e imagens de dentro dele), mas a tela inicial, a ajuda e os badges não foram conferidos na tela pelo agente; conferir com `java -jar target/OhMyGoods.jar`.
-- **(Fase 10) Validação visual fora da janela:** as capturas (`Snapshots`) desenham a mesa sem abrir a janela; cobrem as etapas das Fases 2 a 9, mas não a tela inicial nem a ajuda (`JOptionPane`), nem o tempo real das animações e da narração. Conferir com `java -jar target/OhMyGoods.jar`.
+- **(Fase 10) Validação visual fora da janela:** as capturas (`Snapshots`) desenham a mesa sem abrir a janela; cobrem as etapas das Fases 2 a 9 e, desde o commit "Ajuda desenhada sobre a mesa", também a ajuda (`2c-ajuda`). Ainda não cobrem a tela inicial nem o tempo real das animações e da narração. Conferir com `java -jar target/OhMyGoods.jar`.
 - **(Fase 10) Exaustão segura a ação:** enquanto o humano escolhe o descarte, as outras teclas e cliques ficam bloqueados (só a seleção da mão e ESPAÇO respondem). Fechar a janela nesse momento encerra o jogo normalmente.
 - **(Fase 11) Dicas cortadas:** com a janela baixa ou muitas fichas de assistente, as últimas dicas são cortadas com "..."; as da situação vêm primeiro para não serem as cortadas.
-- **(Fase 12) Produção garantida:** as dicas do planejamento só contam a produção que o mercado e as guildas já cobrem; a que depende das cartas da mão ou da 2ª fileira do mercado não entra.
 - **(Fase 12) Descarte do oponente:** a utilidade da carta é uma heurística simples (recurso usado pelos estabelecimentos, carta que já dá para construir); não olha o mercado nem o que falta para produzir.
-- **(Fase 13) Estabelecimento inteiro sob o mouse:** só vale enquanto o mouse está na faixa visível dele; ao passar para a parte que estava coberta, o destaque vai para o vizinho (o mesmo que recebe o clique).
 - **(Fase 13) Etiquetas empilhadas:** com 3 ou mais etiquetas na mesma carta (ex.: assistente, origem e pagamento), elas cobrem boa parte da arte; na prática aparecem no máximo 2 ao mesmo tempo.
-- **(Fase 13) Linha "última vez" dos oponentes:** durante a narração, as caixas mostram números atualizados a cada passo, mas a linha "> ..." do resumo continua a da rodada anterior até o oponente terminar.
+- **(Fase 14) Previsão da produção:** a previsão gasta as cartas da mão na ordem da fila de produção e de forma gulosa; o jogador pode preferir outra combinação (ou guardar uma carta para construir). A 2ª fileira do mercado continua fora, porque ainda não foi aberta.
+
+### Situação das pendências (análise de 09/10/2026)
+
+**Já concluído (só falta registrar)**
+- **Ajuda dentro do jogo:** deixou de ser `JOptionPane` e é desenhada sobre a mesa (`HelpOverlay`), com captura `2c-ajuda` em `Snapshots`. Isso fecha a parte "ajuda" do ponto *(Fase 10) Validação visual*.
+- **Executável/instalador:** além do `.jar`, existe o instalador `docs/OhMyGoods_v01.msi` (substituiu o `.exe`). O item "Empacotar" da Fase 9 está feito; o instalador ainda não foi registrado em fase nenhuma.
+
+**Resolvido só com código:** os três pontos desta lista (linha "última vez", estabelecimento sob o mouse e produção garantida) foram feitos na Fase 14.
+
+**Precisa de você**
+- **Imagens (Decisão 2; pontos das Fases 1 e 6):** enviar as imagens que existirem — verso da carta, trabalhador e os 16 assistentes. O verso já é lido automaticamente se for salvo como `src/main/resources/images/cards/verso.png`; para o trabalhador e os assistentes, basta dizer os nomes dos arquivos (ou dizer que não existem, e as fichas desenhadas ficam como definitivas).
+- **Documentação Técnica (Decisão 3; item pendente da Fase 9):** `Documentação Técnica - JOhMyGoods.docx` e `Documentacao_Tecnica_JOhMyGoods.md` ainda dizem C++/Qt. Dizer "sim" para reescrever a stack e a arquitetura em Java 21 + Swing + SQLite + Maven (e se o `.docx` também deve ser atualizado ou só o `.md`).
+- **Validação na janela real (Fases 9 e 10):** abrir `java -jar target/OhMyGoods.jar` (ou o `.msi` instalado) e conferir o que as capturas não alcançam: tela inicial (nº de jogadores e nomes), ritmo das animações e da narração dos oponentes, contador e etiquetas. Basta responder "ok" ou descrever o que ficou estranho.
+- **Dificuldade da IA (Fase 7 e Fase 12, descarte do oponente):** jogar algumas partidas e dizer se os oponentes estão fáceis demais. Se estiverem, a próxima fase melhora a IA (trocar a mão, guardar cartas/bens em vez de gastar tudo na cadeia, descarte olhando o mercado); se não, os dois pontos passam a *Concluídos* como "aceito".
+- **Comportamentos aceitos por projeto:** confirmar que podem ir para *Concluídos* como estão — *(Fase 10) Exaustão segura a ação*, *(Fase 11) Dicas cortadas* e *(Fase 13) Etiquetas empilhadas* (3 ou mais etiquetas é raro). Se algum incomodar na prática, diga qual.
 
 ### Concluídos
 
@@ -319,6 +344,9 @@ Registrados ao fim de cada fase; quando resolvidos, passam de *Pendentes* para *
 - **(Fase 10) Sem troco:** pagar acima do custo é permitido (a barra avisa quanto se perde). → Conferido: é a regra do manual.
 - **(Fase 10) Baralho sem semente:** o `Deck` embaralhava sem `Random`, então a mesma semente não repetia a partida. → Resolvido na Fase 12: o `Deck` usa o `Random` do `Setup`.
 - **(Fase 11) Dicas de orçamento:** "já cabem" comparava o custo só com os bens de agora. → Resolvido na Fase 12: soma a produção já garantida (ver *Pendentes*, Fase 12).
+- **(Fase 12) Produção garantida:** as dicas do planejamento só contavam a produção que o mercado e as guildas cobrem. → Resolvido na Fase 14: conta também a que as cartas da mão completam (ver *Pendentes*, Fase 14).
+- **(Fase 13) Estabelecimento inteiro sob o mouse:** ao passar para a parte que estava coberta, o destaque ia para o vizinho. → Resolvido na Fase 14: o destaque (e o clique) fica com ele em toda a área da carta.
+- **(Fase 13) Linha "última vez" dos oponentes:** durante a narração, a linha "> ..." só mudava quando o oponente terminava. → Resolvido na Fase 14: mostra o resumo até o passo narrado.
 - **(Pós-Fase 9) Manual conferido:** com o manual em Markdown, também batem com o código: modo distraído, recursos da mão valendo para um só estabelecimento, mercado e guildas sem valer na cadeia, cadeias de todos os estabelecimentos na rodada final, Vidraçaria (11/12 recursos quaisquer) e troca de inicial a cada rodada. → As escolhas automáticas que restavam (exaustão, bens na cadeia e no pagamento) foram feitas na Fase 10.
 
 ---
