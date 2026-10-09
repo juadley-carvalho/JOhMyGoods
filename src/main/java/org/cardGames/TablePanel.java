@@ -594,15 +594,30 @@ public class TablePanel extends JPanel {
     }
 
     /**
-     * Quadro de dicas: na coluna dos assistentes, logo abaixo da última fileira de fichas, até a mão
-     * (contando a carta selecionada, que sobe). Sobe quando os assistentes são contratados.
+     * Quadro de dicas: na coluna dos assistentes, logo abaixo da última fileira de fichas. Desce até
+     * o pé da mesa se a fileira de baixo (estabelecimentos e mão) termina antes da coluna; senão para
+     * acima da mão (contando a carta selecionada, que sobe). Sobe quando os assistentes são contratados.
      */
     private Rectangle tipsBounds() {
         int width = TILE_COLUMNS * TILE_WIDTH + (TILE_COLUMNS - 1) * TILE_GAP;
+        int left = getWidth() - TILE_SIDE - width;
         int rows = (tiles.size() + TILE_COLUMNS - 1) / TILE_COLUMNS;
         int top = Zone.BELOW_PILES + rows * (TILE_HEIGHT + TILE_GAP) + (rows > 0 ? TIPS_GAP - TILE_GAP : 0);
-        int bottom = Zone.bottomRowY(getHeight()) - CardSprite.LIFT - TIPS_GAP;
-        return new Rectangle(getWidth() - TILE_SIDE - width, top, width, bottom - top);
+        int bottom = bottomRowRight() + TIPS_GAP <= left
+                ? Zone.bottomRowY(getHeight()) + CardSprite.HEIGHT
+                : Zone.bottomRowY(getHeight()) - CardSprite.LIFT - TIPS_GAP;
+        return new Rectangle(left, top, width, bottom - top);
+    }
+
+    /** Até onde vai, à direita, a fileira de baixo do jogador (pelas posições de repouso das cartas). */
+    private int bottomRowRight() {
+        int right = 0;
+        for (Zone zone : new Zone[]{Zone.BUILDINGS, Zone.PLANNED, Zone.HAND}) {
+            for (CardSprite sprite : zones.get(zone)) {
+                right = Math.max(right, sprite.getSlotX() + CardSprite.WIDTH);
+            }
+        }
+        return right;
     }
 
     /** Dicas em itens, quebradas na largura; o que não cabe na altura é cortado com "...". */

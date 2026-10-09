@@ -106,12 +106,15 @@ public enum Zone {
         }
     },
 
-    /** Mão do jogador: leque centralizado embaixo, à direita dos estabelecimentos e da carta a construir. Única área com cartas selecionáveis. */
+    /**
+     * Mão do jogador: leque embaixo, encostado à direita dos estabelecimentos e da carta a construir
+     * (deixa livre o canto inferior direito para o quadro de dicas). Única área com cartas selecionáveis.
+     */
     HAND(true, false, Integer.MAX_VALUE) {
         @Override
         public void layout(List<CardSprite> cards, int width, int height, int buildings, int hand) {
             int planned = buildingX(buildings, buildingStep(width, buildings, hand));
-            centerRow(cards, bottomRowY(height), planned + CardSprite.WIDTH + PILE_GAP, width - HAND_MARGIN);
+            leftRow(cards, bottomRowY(height), planned + CardSprite.WIDTH + PILE_GAP, width - HAND_MARGIN);
         }
     };
 
@@ -199,6 +202,17 @@ public enum Zone {
         // A ordem da lista é a ordem de desenho: a última carta fica por cima.
         for (int i = 0; i < n; i++) {
             cards.get(i).setSlot(startX + i * spacing, y);
+        }
+    }
+
+    /** Fileira sobreposta começando em minX; o espaçamento encolhe se as cartas passarem de maxX. */
+    private static void leftRow(List<CardSprite> cards, int y, int minX, int maxX) {
+        int n = cards.size();
+        if (n == 0) return;
+        int available = (maxX - minX) - CardSprite.WIDTH;
+        int spacing = (n > 1) ? Math.max(4, Math.min(MAX_SPACING, available / (n - 1))) : 0;
+        for (int i = 0; i < n; i++) {
+            cards.get(i).setSlot(minX + i * spacing, y);
         }
     }
 

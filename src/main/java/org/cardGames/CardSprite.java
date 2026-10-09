@@ -53,6 +53,9 @@ public class CardSprite {
         refreshTarget();
     }
 
+    /** Posição horizontal de repouso (sem contar a animação em andamento). */
+    public int getSlotX() { return slotX; }
+
     /** Recalcula o destino: no slot, ou 30px acima dele se a carta estiver selecionada. */
     public void refreshTarget() {
         targetX = slotX;

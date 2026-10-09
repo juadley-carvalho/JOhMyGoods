@@ -237,6 +237,7 @@ Testes novos em `ChainTest` (origem do couro com dois Curtumes), `BuildTest` (de
 - [x] Dicas fixas de cada etapa em `Help.tips` (opções e lembretes de regra), com "H: regras completas" no cabeçalho.
 - [x] Dicas da situação, calculadas em `Game.tips` e mostradas primeiro: no planejamento, quanto valem os bens e que cartas da mão já cabem nesse valor; na produção, que cartas da mão têm o recurso que falta; na construção, se a carta planejada cabe e que assistentes estão ao alcance (ou por que nenhum está); na rodada final, que as cadeias estão liberadas; na exaustão, só a dica do descarte.
 - [x] A ajuda (tecla H) menciona o quadro.
+- [x] Ajuste: a mão encosta à esquerda (logo após os estabelecimentos), deixando livre o canto inferior direito; quando a fileira de baixo termina antes da coluna, o quadro desce até o pé da mesa.
 
 **Validação:** testes passam (83); capturas com 2 e 4 jogadores (8 fichas de assistente) mostram o quadro sem invadir a mão nem o mercado.
 
