@@ -10,6 +10,7 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
@@ -197,6 +198,25 @@ public class TablePanel extends JPanel {
         setCursor(Cursor.getPredefinedCursor(clickable ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
     }
 
+    /** Quantidade de bens, num selo sobre a faixa da pilha que aparece acima do estabelecimento. */
+    private void drawGoodsCount(Graphics2D g) {
+        List<CardSprite> goods = zones.get(Zone.GOODS);
+        if (goods.isEmpty() || goods.getLast().isFlying()) return;
+        Rectangle top = goods.getLast().getHitBounds();
+        String text = String.valueOf(goods.size());
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setFont(getFont().deriveFont(Font.BOLD, 14f));
+        int size = 24;
+        int cx = top.x + top.width - size - 6;
+        int cy = top.y + 5;
+        g.setColor(new Color(0x222222));
+        g.fillOval(cx, cy, size, size);
+        g.setColor(Color.WHITE);
+        g.drawOval(cx, cy, size, size);
+        int tw = g.getFontMetrics().stringWidth(text);
+        g.drawString(text, cx + (size - tw) / 2, cy + size / 2 + 5);
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g); // pinta o fundo
@@ -205,6 +225,7 @@ public class TablePanel extends JPanel {
             sprite.draw(g2);
         }
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        drawGoodsCount(g2);
         g2.setColor(Color.WHITE);
         g2.setFont(getFont().deriveFont(Font.BOLD, 14f));
         g2.drawString(status, 20, 20);

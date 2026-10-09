@@ -42,11 +42,33 @@ public enum Zone {
         }
     },
 
-    /** Mão do jogador: leque centralizado embaixo. Única área com cartas clicáveis. */
+    /**
+     * Bens sobre os estabelecimentos do jogador: pilha virada para baixo, aparecendo
+     * por cima da Carvoaria (vem antes de BUILDINGS para ser desenhada atrás dela).
+     * Por enquanto só a Carvoaria tem bens; a Fase 2 separa uma pilha por estabelecimento.
+     */
+    GOODS(false, true, 12) {
+        @Override
+        public void layout(List<CardSprite> cards, int width, int height) {
+            pile(cards, SIDE, bottomRowY(height) - GOODS_PEEK);
+        }
+    },
+
+    /** Estabelecimentos construídos pelo jogador: canto inferior esquerdo. */
+    BUILDINGS(false, false, Integer.MAX_VALUE) {
+        @Override
+        public void layout(List<CardSprite> cards, int width, int height) {
+            for (int i = 0; i < cards.size(); i++) {
+                cards.get(i).setSlot(SIDE + i * (CardSprite.WIDTH + 10), bottomRowY(height));
+            }
+        }
+    },
+
+    /** Mão do jogador: leque centralizado embaixo, à direita dos estabelecimentos. Única área com cartas clicáveis. */
     HAND(true, false, Integer.MAX_VALUE) {
         @Override
         public void layout(List<CardSprite> cards, int width, int height) {
-            centerRow(cards, height - CardSprite.HEIGHT - HAND_BOTTOM_MARGIN, HAND_MARGIN, width - HAND_MARGIN);
+            centerRow(cards, bottomRowY(height), SIDE + CardSprite.WIDTH + PILE_GAP, width - HAND_MARGIN);
         }
     };
 
@@ -57,6 +79,7 @@ public enum Zone {
     private static final int MAX_SPACING = 40;
     private static final int HAND_MARGIN = 40;
     private static final int HAND_BOTTOM_MARGIN = 20;
+    private static final int GOODS_PEEK = 34;        // quanto da pilha de bens aparece acima do estabelecimento
 
     private final boolean selectable;
     private final boolean faceDown;
@@ -81,6 +104,10 @@ public enum Zone {
     public abstract void layout(List<CardSprite> cards, int width, int height);
 
     // ------------------------------------------------------------------ helpers
+
+    private static int bottomRowY(int height) {
+        return height - CardSprite.HEIGHT - HAND_BOTTOM_MARGIN;
+    }
 
     /** Fileira sobreposta e centralizada entre minX e maxX; o espaçamento encolhe se houver muitas cartas. */
     private static void centerRow(List<CardSprite> cards, int y, int minX, int maxX) {

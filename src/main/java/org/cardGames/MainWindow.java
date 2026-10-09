@@ -8,7 +8,7 @@ import java.awt.event.KeyEvent;
 
 public class MainWindow extends JFrame {
 
-    public MainWindow(Deck deck, Player player) {
+    public MainWindow(GameState state) {
         super("Oh My Goods!");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
@@ -16,7 +16,7 @@ public class MainWindow extends JFrame {
         table.setPreferredSize(new Dimension(1024, 680)); // área de jogo, sem contar a barra de título
         add(table, BorderLayout.CENTER);
 
-        Game game = new Game(deck, player, table);
+        Game game = new Game(state, table);
         table.onKey(KeyEvent.VK_SPACE, game::advance);
         table.onKey(KeyEvent.VK_R, game::replaceHand);
 

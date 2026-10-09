@@ -5,6 +5,11 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 
 public class Card {
 
@@ -47,12 +52,9 @@ public class Card {
         this.selectedImage = setSelectedImage(this.image);
     }
 
-    public void info() {
-        System.out.println("Card " + number + " " + color + " " + name + " " +
-                            value + " " + cost + " " + resource + " " + sun + " " +
-                            qtdRawResource1 + " " + rawResource1 + " " + qtdRawResource2 + " " +
-                            rawResource2 + " " + chainResource1 + " " +
-                            chainResource2 + " " + product + " " + selectedImage);
+    @Override
+    public String toString() {
+        return name + " #" + number;
     }
 
     public BufferedImage setImage() {
@@ -78,7 +80,40 @@ public class Card {
         return selectedImage;
     }
 
+    public int getNumber() { return number; }
+    public Color getColor() { return color; }
     public String getName(){ return name; }
+    /** Pontos de vitória do estabelecimento. */
+    public int getPoints() { return value; }
+    /** Custo em moedas para construir. */
+    public int getCost() { return cost; }
+    /** Recurso que a carta oferece no mercado ou na mão (null na Carvoaria). */
+    public Resource getResource() { return resource; }
+    /** Bem produzido pelo estabelecimento (null nas guildas que não produzem nada). */
+    public Resource getProduct() { return product; }
+    /** Valor em moedas de cada bem produzido (moeda no rodapé da carta). */
+    public int getGoodValue() { return product == null ? 0 : product.getValue(); }
+
+    /** Recursos exigidos para produzir, com a quantidade de cada um. */
+    public Map<Resource, Integer> getRawResources() {
+        Map<Resource, Integer> raw = new EnumMap<>(Resource.class);
+        if (rawResource1 != null) raw.merge(rawResource1, qtdRawResource1, Integer::sum);
+        if (rawResource2 != null) raw.merge(rawResource2, qtdRawResource2, Integer::sum);
+        return Collections.unmodifiableMap(raw);
+    }
+
+    /** Itens da cadeia de produção (0, 1 ou 2), entregues juntos para gerar bens extras. */
+    public List<Resource> getChainResources() {
+        List<Resource> chain = new ArrayList<>(2);
+        if (chainResource1 != null) chain.add(chainResource1);
+        if (chainResource2 != null) chain.add(chainResource2);
+        return List.copyOf(chain);
+    }
+
+    /** Guildas (cartas pretas) dão bônus, mas não recebem trabalhador nem produzem bens. */
+    public boolean isProducer() { return color != Color.PRETO; }
+    public boolean isGuild() { return color == Color.PRETO; }
+
     public BufferedImage getImage() { return image; }
     public BufferedImage getSelectedImage() { return selectedImage; }
     public boolean isSelected() { return isSelected; }

@@ -1,5 +1,6 @@
 package org.cardGames.database;
 
+import org.cardGames.Assistant;
 import org.cardGames.Card;
 import org.cardGames.Color;
 import org.cardGames.Resource;
@@ -52,18 +53,28 @@ public class Database {
         }
     }
 
+    /** Cartas do baralho: estabelecimentos e guildas (as Carvoarias ficam de fora). */
     public List<Card> getCards() {
+        return queryCards("SELECT * FROM CARTA WHERE CAR_RECURSO <> '0'");
+    }
+
+    /** As 4 Carvoarias: cada jogador começa com uma. Não têm recurso (CAR_RECURSO = '0'). */
+    public List<Card> getCharcoalBurners() {
+        return queryCards("SELECT * FROM CARTA WHERE CAR_RECURSO = '0'");
+    }
+
+    private List<Card> queryCards(String sql) {
         List<Card> deck = new ArrayList<>();
         try(Statement stmt = this.connection.createStatement()) {
-            ResultSet rs = stmt. executeQuery("SELECT * FROM CARTA");
+            ResultSet rs = stmt.executeQuery(sql);
             while(rs.next()) {
-                if (rs.getString("CAR_RECURSO").equals("0")) {continue;}
+                String resource = rs.getString("CAR_RECURSO");
                 deck.add(new Card(rs.getInt("CAR_NUMERO_IMAGEM"),
                         Color.valueOf(rs.getString("CAR_COR")),
                         rs.getString("CAR_NOME"),
                         rs.getInt("CAR_PONTOS"),
                         rs.getInt("CAR_CUSTO"),
-                        Resource.fromString(rs.getString("CAR_RECURSO")),
+                        "0".equals(resource) ? null : Resource.fromString(resource),
                         (rs.getInt("CAR_SOL") == 1),
                         Resource.fromString(rs.getString("CAR_PRODUTO")),
                         rs.getInt("CAR_QUANTIDADE_PROD_1"),
@@ -77,6 +88,26 @@ public class Database {
             System.out.println("Error getting cards: " + e);
         }
         return deck;
+    }
+
+    /** Os 16 assistentes (tabela AJUDANTE). Colunas de cor vazias são ignoradas. */
+    public List<Assistant> getAssistants() {
+        List<Assistant> assistants = new ArrayList<>();
+        try(Statement stmt = this.connection.createStatement()) {
+            ResultSet rs = stmt.executeQuery("SELECT * FROM AJUDANTE ORDER BY AJU_NUMERO");
+            while (rs.next()) {
+                List<Color> colors = new ArrayList<>();
+                for (int i = 1; i <= 5; i++) {
+                    String color = rs.getString("AJU_COR_" + i);
+                    if (color != null && !color.isBlank()) colors.add(Color.valueOf(color.trim()));
+                }
+                assistants.add(new Assistant(rs.getInt("AJU_NUMERO"), rs.getInt("AJU_CUSTO"),
+                        rs.getInt("AJU_PONTOS"), colors));
+            }
+        } catch (SQLException e) {
+            System.out.println("Error getting assistants: " + e);
+        }
+        return assistants;
     }
 
     public List<String> getBuildingsNames() {

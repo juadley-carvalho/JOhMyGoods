@@ -1,6 +1,5 @@
 package org.cardGames;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -24,35 +23,56 @@ public class Game {
         }
     }
 
-    private static final int INITIAL_HAND = 5;
     private static final int STEP_MS = 120; // intervalo entre uma carta e a próxima
 
+    private final GameState state;
     private final Deck deck;
     private final Player player;
+    private final Market market;
     private final TablePanel table;
-    private final List<Card> market = new ArrayList<>();
 
     private Phase phase = Phase.NEW_HAND;
     private boolean handReplaced;
     private int clock; // atraso acumulado da ação em andamento: faz as cartas saírem uma de cada vez
 
-    public Game(Deck deck, Player player, TablePanel table) {
-        this.deck = deck;
-        this.player = player;
+    public Game(GameState state, TablePanel table) {
+        this.state = state;
+        this.deck = state.deck();
+        this.player = state.human();
+        this.market = state.market();
         this.table = table;
     }
 
-    /** Preparação: monta a pilha de compras na mesa e distribui a mão inicial. */
+    /**
+     * Mostra na mesa a preparação já feita pelo Setup: a Carvoaria no lugar, e os carvões
+     * e a mão inicial saindo da pilha de compras, uma carta de cada vez.
+     */
     public void start() {
+        Building charcoal = player.getCharcoalBurner();
+        table.addCard(charcoal.getCard(), Zone.BUILDINGS);
+
+        // As cartas já compradas no Setup partem do topo da pilha, como se fossem compradas agora
         for (Card card : deck.getDrawPile()) {
             table.addCard(card, Zone.DECK);
         }
+        for (Card card : charcoal.getGoods()) {
+            table.addCard(card, Zone.DECK);
+        }
+        for (Card card : player.getHand()) {
+            table.addCard(card, Zone.DECK);
+        }
+
         clock = 0;
-        for (int i = 0; i < INITIAL_HAND; i++) {
-            deal();
+        for (Card card : charcoal.getGoods()) {
+            send(card, Zone.GOODS);
+        }
+        for (Card card : player.getHand()) {
+            send(card, Zone.HAND);
         }
         updateStatus();
     }
+
+    public GameState getState() { return state; }
 
     /** Avança para a próxima etapa da rodada. */
     public void advance() {
@@ -115,7 +135,7 @@ public class Game {
         while (suns < 2) {
             Card card = draw();
             if (card == null) break; // sem cartas (regra de esgotar as duas pilhas ainda não implementada)
-            market.add(card);
+            if (row == Zone.MARKET_SUNRISE) market.addSunrise(card); else market.addSunset(card);
             send(card, row);
             if (card.isSun()) suns++;
 
@@ -124,11 +144,10 @@ public class Game {
 
     /** Fim da fase IV: o mercado inteiro vai para o descarte. */
     private void closeMarket() {
-        for (Card card : market) {
+        for (Card card : market.clear()) {
             deck.discard(card);
             send(card, Zone.DISCARD);
         }
-        market.clear();
     }
 
     /** Compra do topo; se a pilha acabou, embaralha o descarte de volta antes (e mostra isso na mesa). */

@@ -62,14 +62,16 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** representar em código tudo o que existe na mesa, sem ainda aplicar as regras de produção.
 
-- [ ] `Card`: getters para custo, pontos, recurso, produto, insumos e cadeia; método `isProducer()` (cartas cinza/guildas não produzem).
-- [ ] `Building` (estabelecimento construído): carta + bens acumulados sobre ela + pessoa alocada.
-- [ ] `Worker` (trabalhador: atento/distraído) e `Assistant` (custo, pontos, cores exigidas — tabela `AJUDANTE`).
-- [ ] `Player`: mão, estabelecimentos, trabalhador, assistentes, carta "a construir".
-- [ ] `Market`: duas fileiras, contagem de recursos disponíveis.
-- [ ] Preparação completa (manual p. 2): Carvoaria aleatória por jogador, 7 carvões sobre ela, 5 cartas na mão, assistentes sorteados (4/6/8 conforme o nº de jogadores).
-- [ ] Conferir a base de dados contra o manual: as 110 cartas físicas incluem trabalhadores e assistentes; verificar se as guildas estão no banco e se faltam imagens (assistentes, trabalhador, verso da carta).
-- [ ] Testes unitários do setup.
+- [x] `Card`: getters para custo, pontos, recurso, produto, insumos e cadeia; método `isProducer()` (cartas cinza/guildas não produzem).
+- [x] `Building` (estabelecimento construído): carta + bens acumulados sobre ela + pessoa alocada.
+- [x] `Worker` (trabalhador: atento/distraído) e `Assistant` (custo, pontos, cores exigidas — tabela `AJUDANTE`).
+- [x] `Player`: mão, estabelecimentos, trabalhador, assistentes, carta "a construir".
+- [x] `Market`: duas fileiras, contagem de recursos disponíveis.
+- [x] Preparação completa (manual p. 2): Carvoaria aleatória por jogador, 7 carvões sobre ela, 5 cartas na mão, assistentes sorteados (4/6/8 conforme o nº de jogadores).
+- [x] Conferir a base de dados contra o manual: as 110 cartas físicas incluem trabalhadores e assistentes; verificar se as guildas estão no banco e se faltam imagens (assistentes, trabalhador, verso da carta).
+- [x] Testes unitários do setup.
+
+**Conferência do banco:** 94 cartas no baralho (77 estabelecimentos + 17 guildas, cor `PRETO`) + 4 Carvoarias (`CAR_RECURSO = '0'`, separadas em `Database.getCharcoalBurners()`) + 16 assistentes na tabela `AJUDANTE` (o assistente 16 tem `AJU_COR_5 = ''`, ignorado). Há imagem para todas as 98 cartas; **não há** imagens de assistentes, trabalhador nem verso (o verso usa um desenho provisório). Os bens de cada estabelecimento ainda são exibidos numa pilha única (`Zone.GOODS`) — por enquanto só a Carvoaria tem bens.
 
 **Validação:** ao abrir o jogo, a Carvoaria aparece na área do jogador com 7 carvões; testes do setup passam.
 
