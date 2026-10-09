@@ -1,7 +1,6 @@
 package org.cardGames;
 
 import javax.swing.JFrame;
-import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.awt.Dimension;
 import java.awt.Toolkit;
@@ -14,6 +13,7 @@ public class MainWindow extends JFrame {
 
     private final Function<List<String>, GameState> newGame;
     private final Dimension size;
+    private final HelpOverlay help = new HelpOverlay();
     private TablePanel table;
     private List<String> lastNames;
 
@@ -26,6 +26,7 @@ public class MainWindow extends JFrame {
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         size = new Dimension(Math.min(1280, screen.width - 40), Math.min(760, screen.height - 100));
 
+        setGlassPane(help);
         showStart();
         pack();
         setLocationRelativeTo(null);
@@ -34,6 +35,7 @@ public class MainWindow extends JFrame {
 
     /** Tela inicial na própria janela: jogadores e nomes (os da última partida, se houver). */
     private void showStart() {
+        help.close();
         StartScreen start = new StartScreen(lastNames, this::startGame, () -> System.exit(0));
         start.setPreferredSize(size);
         setContentPane(start);
@@ -47,12 +49,13 @@ public class MainWindow extends JFrame {
         table = new TablePanel();
         table.setPreferredSize(size);
         Game game = new Game(newGame.apply(names), table);
-        table.onKey(KeyEvent.VK_SPACE, game::advance);
-        table.onKey(KeyEvent.VK_R, game::replaceHand);
-        table.onKey(KeyEvent.VK_C, game::planSelected);
-        table.onKey(KeyEvent.VK_N, game::decline);
-        table.onKey(KeyEvent.VK_K, game::runChain);
-        table.onKey(KeyEvent.VK_H, this::showHelp);
+        table.onKey(KeyEvent.VK_SPACE, unlessHelp(game::advance));
+        table.onKey(KeyEvent.VK_R, unlessHelp(game::replaceHand));
+        table.onKey(KeyEvent.VK_C, unlessHelp(game::planSelected));
+        table.onKey(KeyEvent.VK_N, unlessHelp(game::decline));
+        table.onKey(KeyEvent.VK_K, unlessHelp(game::runChain));
+        table.onKey(KeyEvent.VK_H, help::toggle);
+        table.onKey(KeyEvent.VK_ESCAPE, help::close);
         game.onGameOver(this::showResult);
 
         setContentPane(table);
@@ -63,8 +66,11 @@ public class MainWindow extends JFrame {
         SwingUtilities.invokeLater(game::start);
     }
 
-    private void showHelp() {
-        JOptionPane.showMessageDialog(this, Help.TEXT, "Ajuda", JOptionPane.PLAIN_MESSAGE);
+    /** Com a ajuda aberta, as teclas do jogo não fazem nada (só H e Esc, que a fecham). */
+    private Runnable unlessHelp(Runnable action) {
+        return () -> {
+            if (!help.isVisible()) action.run();
+        };
     }
 
     /** Tela de resultado, desenhada sobre a mesa: detalhamento da pontuação e opção de nova partida. */

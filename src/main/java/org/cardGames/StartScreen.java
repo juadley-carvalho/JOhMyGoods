@@ -46,11 +46,11 @@ public final class StartScreen extends JPanel {
 
     // Mesma paleta da mesa (TablePanel)
     private static final Color FELT = new Color(0x2E5E3E);
-    private static final Color PANEL = new Color(0x1F3A2A);
-    private static final Color GOLD = new Color(0xFFD54F);
-    private static final Color SOFT = new Color(0xC8E6C9);
-    private static final Color FIELD = new Color(0x163022);
-    private static final Color FIELD_OFF = new Color(0x3B5A47);
+    static final Color PANEL = new Color(0x1F3A2A);
+    static final Color GOLD = new Color(0xFFD54F);
+    static final Color SOFT = new Color(0xC8E6C9);
+    static final Color FIELD = new Color(0x163022);
+    static final Color FIELD_OFF = new Color(0x3B5A47);
 
     /** Cartas do leque decorativo de cada lado (sorteadas a cada vez que a tela aparece). */
     private static final int FAN_CARDS = 3;
@@ -258,7 +258,7 @@ public final class StartScreen extends JPanel {
         }
     }
 
-    private static Graphics2D antialiased(Graphics g) {
+    static Graphics2D antialiased(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -327,7 +327,7 @@ public final class StartScreen extends JPanel {
     }
 
     /** Botão desenhado à mão, no estilo dos botões da tela de resultado. */
-    private abstract static class PaintedButton extends JButton {
+    abstract static class PaintedButton extends JButton {
         PaintedButton(String text, Runnable action) {
             super(text);
             setContentAreaFilled(false);
@@ -368,7 +368,7 @@ public final class StartScreen extends JPanel {
     }
 
     /** "Começar partida" (verde) e "Sair" (cinza), como "Jogar de novo" e "Sair" no resultado. */
-    private static final class ActionButton extends PaintedButton {
+    static final class ActionButton extends PaintedButton {
         private final boolean primary;
 
         ActionButton(String text, boolean primary, Runnable action) {

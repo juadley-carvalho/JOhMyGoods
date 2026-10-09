@@ -190,6 +190,7 @@ public final class Snapshots {
         act(game::advance);           // Fase I
         act(game::advance);           // Nascer do Sol
         shot("2-planejamento");
+        helpShot("2c-ajuda");
         hover(table.opponentArea(0), "2a-detalhe-oponente");
         hover(table.tileArea(1), "2b-detalhe-assistente");
         act(() -> table.press(human.getCharcoalBurner().getCard()));
@@ -277,11 +278,27 @@ public final class Snapshots {
         table.finishAnimations();
     }
 
+    /** A ajuda aberta sobre a mesa, como no glass pane da janela. */
+    private void helpShot(String name) {
+        HelpOverlay help = new HelpOverlay();
+        help.openFor(WIDTH, HEIGHT);
+        BufferedImage image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = image.createGraphics();
+        table.paint(g);
+        help.paint(g);
+        g.dispose();
+        write(image, name);
+    }
+
     private void shot(String name) {
         BufferedImage image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = image.createGraphics();
         table.paint(g);
         g.dispose();
+        write(image, name);
+    }
+
+    private void write(BufferedImage image, String name) {
         try {
             ImageIO.write(image, "png", new File(dir, prefix + "-" + name + ".png"));
         } catch (java.io.IOException e) {
