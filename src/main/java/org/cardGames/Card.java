@@ -114,6 +114,9 @@ public class Card {
     public boolean isProducer() { return color != Color.PRETO; }
     public boolean isGuild() { return color == Color.PRETO; }
 
+    /** Recurso extra que a guilda dá ao dono para iniciar produções (null se não for guilda de recurso). */
+    public Resource getGuildResource() { return isGuild() ? product : null; }
+
     public BufferedImage getImage() { return image; }
     public BufferedImage getSelectedImage() { return selectedImage; }
     public boolean isSelected() { return isSelected; }

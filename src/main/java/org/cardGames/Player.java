@@ -2,6 +2,7 @@ package org.cardGames;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /** Tudo o que pertence a um jogador: mão, estabelecimentos, trabalhador, assistentes e a carta a construir. */
 public class Player {
@@ -106,6 +107,35 @@ public class Player {
             plannedBuilding = null;
         }
         return card;
+    }
+
+    // ------------------------------------------------------- produção (Fase IV)
+
+    /**
+     * Tenta produzir no estabelecimento com a pessoa alocada nele, oferecendo cartas da mão.
+     * Só as cartas necessárias saem da mão (quem chama as descarta); os bens não são colocados aqui:
+     * quem chama compra {@code result.goods()} cartas e as põe sobre o estabelecimento.
+     */
+    public Production.Result produce(Building building, Market market, List<Card> offered) {
+        if (!buildings.contains(building) || !building.isOccupied()) {
+            throw new IllegalStateException("ninguém produz em " + building.getCard().getName());
+        }
+        if (!hand.containsAll(offered)) {
+            throw new IllegalArgumentException("só cartas da mão podem ser usadas na produção");
+        }
+        Map<Resource, Integer> free = Production.freeResources(this, market);
+        Person person = building.getPerson();
+        List<Card> used = Production.cardsToUse(building.getCard(), free, offered, person.missingAllowed());
+        int goods = Production.goods(building, free, used);
+        if (goods == 0) return new Production.Result(List.of(), 0);
+        hand.removeAll(used);
+        return new Production.Result(used, goods);
+    }
+
+    /** Fim da produção: o trabalhador volta (atento para a próxima rodada); assistentes permanecem. */
+    public void finishProduction() {
+        removeWorker();
+        worker.setMode(Worker.Mode.ATTENTIVE);
     }
 
     /** O planejamento só termina com o trabalhador alocado (a construção é opcional). */

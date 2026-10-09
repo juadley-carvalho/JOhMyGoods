@@ -32,4 +32,10 @@ public final class Worker implements Person {
     public Mode getMode() { return mode; }
     public void setMode(Mode mode) { this.mode = mode; }
     public void toggleMode() { mode = mode.toggle(); }
+
+    @Override
+    public int goodsProduced() { return mode.getGoods(); }
+
+    @Override
+    public int missingAllowed() { return mode.getMissingAllowed(); }
 }

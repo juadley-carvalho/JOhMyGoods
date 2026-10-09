@@ -14,7 +14,9 @@ public class Game {
         PLAN("Fase II - Planejamento", "clique num estabelecimento: trabalhador (de novo: atento/distraído)   |   "
                 + "C: construir a carta selecionada   |   ESPAÇO: continuar"),
         SUNSET("Fase III - Pôr do Sol", "ESPAÇO: abrir a 2ª fileira do mercado"),
-        PRODUCE("Fase IV - Produzir e construir (ainda não implementada)", "ESPAÇO: encerrar a rodada e descartar o mercado");
+        PRODUCE("Fase IV - Produzir", "selecione cartas da mão para completar os recursos   |   "
+                + "ESPAÇO: produzir   |   N: não produzir"),
+        BUILD("Fase IV - Construir (ainda não implementada)", "ESPAÇO: encerrar a rodada e descartar o mercado");
 
         final String title;
         final String hint;
@@ -111,6 +113,10 @@ public class Game {
                 phase = Phase.PRODUCE;
             }
             case PRODUCE -> {
+                if (!produce()) return;
+                phase = Phase.BUILD;
+            }
+            case BUILD -> {
                 closeMarket();
                 endPlanning();
                 handReplaced = false;
@@ -134,6 +140,14 @@ public class Game {
         for (int i = 0; i < old.size(); i++) {
             deal();
         }
+        updateStatus();
+    }
+
+    /** Fase IV: abre mão de produzir nesta rodada. */
+    public void skipProduction() {
+        if (table.isBusy() || phase != Phase.PRODUCE) return;
+        player.finishProduction();
+        phase = Phase.BUILD;
         updateStatus();
     }
 
@@ -181,12 +195,52 @@ public class Game {
     }
 
     /**
-     * Fim da rodada. Enquanto produção e construção (fases 3 e 5) não existem,
-     * o trabalhador volta e a carta planejada retorna para a mão.
+     * Produz no estabelecimento do trabalhador com as cartas selecionadas na mão:
+     * as cartas usadas vão para o descarte e os bens saem da pilha de compras para cima do estabelecimento.
+     * Retorna false (com aviso) se os recursos não bastam.
+     */
+    private boolean produce() {
+        Building building = player.getWorkerBuilding();
+        if (building == null) return true; // nada a produzir
+        List<Card> selected = player.getHand().stream().filter(Card::isSelected).toList();
+        Production.Result result = player.produce(building, market, selected);
+        if (!result.succeeded()) {
+            warn("faltam " + describeMissing(building, selected) + " - selecione cartas da mão ou N: não produzir");
+            return false;
+        }
+        for (Card card : result.usedCards()) {
+            deck.discard(card);
+            send(card, Zone.DISCARD);
+        }
+        int index = player.getBuildings().indexOf(building);
+        for (int i = 0; i < result.goods(); i++) {
+            Card good = draw();
+            if (good == null) break;
+            building.addGood(good);
+            table.moveCard(good, Zone.GOODS, index, clock);
+            clock += STEP_MS;
+        }
+        player.finishProduction();
+        return true;
+    }
+
+    private String describeMissing(Building building, List<Card> selected) {
+        java.util.Map<Resource, Integer> available = new java.util.EnumMap<>(Resource.class);
+        available.putAll(Production.freeResources(player, market));
+        selected.forEach(c -> { if (c.getResource() != null) available.merge(c.getResource(), 1, Integer::sum); });
+        int allowed = building.getPerson().missingAllowed();
+        StringBuilder text = new StringBuilder();
+        Production.missing(building.getCard(), available).forEach((resource, n) ->
+                text.append(text.isEmpty() ? "" : ", ").append(n).append(" ").append(resource));
+        if (allowed > 0 && !text.isEmpty()) text.append(" (distraído: 1 pode faltar)");
+        return text.toString();
+    }
+
+    /**
+     * Fim da rodada. Enquanto a construção (Fase 5) não existe, a carta planejada retorna para a mão.
      */
     private void endPlanning() {
-        player.removeWorker();
-        player.getWorker().setMode(Worker.Mode.ATTENTIVE);
+        player.finishProduction();
         Card planned = player.cancelPlannedBuilding();
         if (planned != null) send(planned, Zone.HAND);
     }
@@ -246,6 +300,12 @@ public class Game {
 
     private void updateStatus() {
         String hint = (warning != null) ? "ATENÇÃO: " + warning : phase.hint;
+        Building working = player.getWorkerBuilding();
+        if (warning == null && phase == Phase.PRODUCE && working != null) {
+            String missing = describeMissing(working, List.of());
+            hint = (missing.isEmpty() ? "recursos completos no mercado" : "faltam " + missing)
+                    + "   |   " + hint;
+        }
         warning = null;
         table.setStatus(phase.title + "   |   " + hint);
         refreshWorkerBadge();

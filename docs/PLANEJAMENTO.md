@@ -97,13 +97,15 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** validar recursos e produzir bens. Esta é a regra central do jogo — será feita com testes primeiro.
 
-- [ ] Calcular recursos disponíveis: mercado (compartilhado, não é consumido) + cartas da mão (descartadas, valem para um único estabelecimento).
-- [ ] Atento: exige 100% → 2 bens. Distraído: ignora 1 unidade à escolha → 1 bem. Assistente: exige 100% → 1 bem.
-- [ ] Recurso "QUALQUER" (Vidraçaria: 11 recursos quaisquer).
-- [ ] Guildas de recurso: +1 recurso só para o dono, válido apenas para iniciar produção.
-- [ ] Interface para escolher quais cartas da mão completar os recursos faltantes.
-- [ ] Bens: cartas da pilha de compras colocadas viradas sobre o estabelecimento.
-- [ ] Trabalhador sai do estabelecimento ao fim da produção; assistente permanece.
+- [x] Calcular recursos disponíveis: mercado (compartilhado, não é consumido) + cartas da mão (descartadas, valem para um único estabelecimento).
+- [x] Atento: exige 100% → 2 bens. Distraído: ignora 1 unidade à escolha → 1 bem. Assistente: exige 100% → 1 bem.
+- [x] Recurso "QUALQUER" (Vidraçaria: 11 ou 12 recursos quaisquer).
+- [x] Guildas de recurso: +1 recurso só para o dono, válido apenas para iniciar produção (`Card.getGuildResource()`).
+- [x] Interface para escolher quais cartas da mão completar os recursos faltantes (selecionar na mão + **ESPAÇO**; **N** não produz). Só as cartas necessárias são descartadas.
+- [x] Bens: cartas da pilha de compras colocadas viradas sobre o estabelecimento.
+- [x] Trabalhador sai do estabelecimento ao fim da produção; assistente permanece (`Player.finishProduction`).
+
+**Fluxo da rodada:** ... → Pôr do Sol → **Produzir** → Construir (provisório, Fase 5). A barra de status mostra o que falta. Regras em `Production` (cálculo puro) e `Player.produce`, testadas em `ProductionTest`.
 
 **Validação:** testes cobrindo os exemplos do manual (p. 6–7, Carvoaria atenta/distraída) passam e a produção funciona na tela.
 
@@ -199,6 +201,9 @@ Registrados ao fim de cada fase; riscar quando resolvidos.
 - **(Fase 2) Trabalhador obrigatório:** o avanço exige o trabalhador alocado; a construção é opcional. Conferir com o manual.
 - **(Fase 2) Largura da mesa:** com muitos estabelecimentos (até 8 + carta a construir) a fileira de baixo ocupa a largura toda e a mão fica espremida. Rever o layout (Fase 9 ou antes, se atrapalhar).
 - **(Fase 2) Validação visual:** a interface foi compilada e as regras testadas, mas a tela não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
+- **(Fase 3) Só o trabalhador produz:** a produção na tela cobre apenas o estabelecimento do trabalhador; assistentes (regra já em `Player.produce`) entram na Fase 6, com a escolha de cartas por estabelecimento.
+- **(Fase 3) Recurso PEDRA:** não há estabelecimento com recurso pedra no banco (só as guildas oferecem pedra no mercado). Conferir com o manual.
+- **(Fase 3) Validação visual:** regras testadas, mas a tela de produção não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---

@@ -37,6 +37,12 @@ public final class Assistant implements Person {
     }
 
     @Override
+    public int goodsProduced() { return GOODS; }
+
+    @Override
+    public int missingAllowed() { return 0; }
+
+    @Override
     public String toString() {
         return "Assistente #" + number;
     }
