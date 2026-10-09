@@ -81,7 +81,7 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** o jogador decide onde trabalhar e o que construir, depois do Nascer do Sol.
 
-- [ ] Área de estabelecimentos do jogador na mesa (nova `Zone`).
+- [ ] Área de estabelecimentos do jogador na mesa (nova `Zone`), com uma pilha de bens por estabelecimento (hoje `Zone.GOODS` é uma pilha única).
 - [ ] Clicar em um estabelecimento para alocar o trabalhador; alternar **atento** (todos os recursos → 2 bens) / **distraído** (1 recurso a menos → 1 bem).
 - [ ] Escolher 1 carta da mão para construir (fica virada para baixo).
 - [ ] Mover assistente pagando 2 moedas (pode ficar para a Fase 6).
@@ -183,6 +183,17 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 - [ ] Ajuda/regras resumidas dentro do jogo.
 - [ ] Empacotar como `.jar` executável.
 - [ ] Atualizar a Documentação Técnica (stack Java).
+
+---
+
+## Pontos de atenção
+
+Registrados ao fim de cada fase; riscar quando resolvidos.
+
+- **(Fase 1) Pilha única de bens:** `Zone.GOODS` mostra os bens de todos os estabelecimentos numa só pilha. Resolver na Fase 2.
+- **(Fase 1) Preparação não conferida no manual:** o PDF não pôde ser lido no ambiente de desenvolvimento; Carvoaria + 7 carvões, 5 cartas e 2 assistentes por jogador seguem este planejamento. Conferir com o manual (p. 2).
+- **(Fase 1) Imagens faltantes:** assistentes, trabalhador e verso da carta (o verso usa desenho provisório). Ver *Decisões em aberto*, item 2.
+- **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---
 
