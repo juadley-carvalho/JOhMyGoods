@@ -107,7 +107,6 @@ public class Game {
             player.receive(card);
             send(card, Zone.HAND);
         }
-        //card.info();
     }
 
     private void openMarketRow(Zone row) {
@@ -120,7 +119,6 @@ public class Game {
             send(card, row);
             if (card.isSun()) suns++;
 
-            card.info();
         }
     }
 

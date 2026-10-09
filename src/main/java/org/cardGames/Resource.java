@@ -1,7 +1,5 @@
 package org.cardGames;
 
-import org.cardGames.database.Database;
-
 public enum Resource {
 
     ALIMENTO(8),

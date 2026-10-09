@@ -19,14 +19,6 @@ public class Deck {
 
         long suns = drawPile.stream().filter(Card::isSun).count();
 
-        List<Card> testList = new ArrayList<>(List.copyOf(drawPile));
-
-        while (!testList.isEmpty()) {
-            Card card = testList.removeFirst();
-            if (card.isSun()) {
-               //card.info();
-            }
-        }
         if (suns < 2) {
             throw new IllegalArgumentException("01 Baralho com " + suns + " meio(s) sol(is): verifique CAR_SOL no banco");
         }

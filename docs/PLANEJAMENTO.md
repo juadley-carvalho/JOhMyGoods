@@ -46,13 +46,13 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 **Objetivo:** compilar, rodar e testar o projeto de forma confiável, por linha de comando e pela IDE.
 
-- [ ] Colocar o JDK no `PATH` / `JAVA_HOME` (JDK 25 instalado em `C:\Program Files\Eclipse Adoptium\`, mas `java` não é encontrado no terminal).
-- [ ] Instalar o Maven (ou usar o Maven embutido do IntelliJ) e adicionar o *Maven Wrapper* (`mvnw`) ao projeto.
-- [ ] Adicionar **JUnit 5** ao `pom.xml` e um primeiro teste (ex.: `DeckTest`).
-- [ ] Configurar o plugin de execução (`exec-maven-plugin`) para rodar com `mvnw exec:java`.
-- [ ] Carregar imagens e banco pelo *classpath* (`getResource`) em vez de caminhos fixos `src/main/...` — necessário para o jogo funcionar fora da IDE.
-- [ ] Mover `ohmygoods.db` para `src/main/resources/`.
-- [ ] Limpeza: código de teste solto em `Deck` (`testList`), `card.info()` no mercado, imports não usados.
+- [x] Colocar o JDK no `PATH` / `JAVA_HOME` (JDK 25 instalado em `C:\Program Files\Eclipse Adoptium\`, mas `java` não é encontrado no terminal).
+- [x] Instalar o Maven (ou usar o Maven embutido do IntelliJ) e adicionar o *Maven Wrapper* (`mvnw`) ao projeto.
+- [x] Adicionar **JUnit 5** ao `pom.xml` e um primeiro teste (ex.: `DeckTest`).
+- [x] Configurar o plugin de execução (`exec-maven-plugin`) para rodar com `mvnw exec:java`.
+- [x] Carregar imagens e banco pelo *classpath* (`getResource`) em vez de caminhos fixos `src/main/...` — necessário para o jogo funcionar fora da IDE.
+- [x] Mover `ohmygoods.db` para `src/main/resources/`.
+- [x] Limpeza: código de teste solto em `Deck` (`testList`), `card.info()` no mercado, imports não usados.
 
 **Validação:** `mvnw test` passa e `mvnw exec:java` abre a mesa funcionando como na v0.1.0.
 

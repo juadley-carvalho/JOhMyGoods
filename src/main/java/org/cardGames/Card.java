@@ -3,8 +3,8 @@ package org.cardGames;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 
 public class Card {
 
@@ -56,10 +56,12 @@ public class Card {
     }
 
     public BufferedImage setImage() {
-        String imagePath = "src/main/resources/images/cards/carta_";
+        String imagePath = "/images/cards/carta_" + String.format("%03d", number) + ".png";
         BufferedImage image = null;
         try {
-            image = ImageIO.read(new File(imagePath + String.format("%03d",number) + ".png"));
+            URL url = Card.class.getResource(imagePath);
+            if (url == null) throw new IOException("imagem não encontrada no classpath: " + imagePath);
+            image = ImageIO.read(url);
         } catch(IOException e) {
             System.out.println("Erro ao carregar imagem da carta: " + e.getMessage());
         }
