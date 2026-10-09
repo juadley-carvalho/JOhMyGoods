@@ -19,9 +19,21 @@ public class Setup {
         return database.getCards();
     }
 
-    public static GameState newGame(Database database, int numPlayers) {
+    public static GameState newGame(Database database, List<String> names) {
         return newGame(database.getCards(), database.getCharcoalBurners(), database.getAssistants(),
-                numPlayers, new Random());
+                names, new Random());
+    }
+
+    /** Nomes padrão: "Você" para o humano, "Jogador N" para os oponentes. */
+    public static List<String> defaultNames(int numPlayers) {
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < numPlayers; i++) names.add(i == 0 ? "Você" : "Jogador " + (i + 1));
+        return names;
+    }
+
+    public static GameState newGame(List<Card> cards, List<Card> charcoalBurners, List<Assistant> assistants,
+                                    int numPlayers, Random random) {
+        return newGame(cards, charcoalBurners, assistants, defaultNames(numPlayers), random);
     }
 
     /**
@@ -29,7 +41,8 @@ public class Setup {
      * e 5 cartas na mão; são sorteados 2 assistentes por jogador.
      */
     public static GameState newGame(List<Card> cards, List<Card> charcoalBurners, List<Assistant> assistants,
-                                    int numPlayers, Random random) {
+                                    List<String> names, Random random) {
+        int numPlayers = names.size();
         if (numPlayers < MIN_PLAYERS || numPlayers > MAX_PLAYERS) {
             throw new IllegalArgumentException("número de jogadores deve ser de 2 a 4: " + numPlayers);
         }
@@ -44,7 +57,7 @@ public class Setup {
 
         List<Player> players = new ArrayList<>();
         for (int i = 0; i < numPlayers; i++) {
-            Player player = new Player(i == 0 ? "Você" : "Jogador " + (i + 1));
+            Player player = new Player(names.get(i));
             Building charcoal = player.build(burners.get(i));
             for (int c = 0; c < INITIAL_COAL; c++) charcoal.addGood(deck.draw());
             players.add(player);

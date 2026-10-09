@@ -192,11 +192,11 @@ Regra de ouro: **as regras não dependem da tela**. Assim conseguimos testar a l
 
 ## Fase 9 — Polimento
 
-- [ ] Feedback visual: produção atenta/distraída, recursos faltantes destacados, contador de moedas.
-- [ ] Tela inicial (nº de jogadores, nomes).
-- [ ] Ajuda/regras resumidas dentro do jogo.
-- [ ] Empacotar como `.jar` executável.
-- [ ] Atualizar a Documentação Técnica (stack Java).
+- [x] Feedback visual: produção atenta/distraída, recursos faltantes destacados, contador de moedas.
+- [x] Tela inicial (nº de jogadores, nomes).
+- [x] Ajuda/regras resumidas dentro do jogo.
+- [x] Empacotar como `.jar` executável.
+- [ ] Atualizar a Documentação Técnica (stack Java). *Pendente: depende da Decisão em aberto 3; o README já foi atualizado.*
 
 ---
 
@@ -236,6 +236,11 @@ Registrados ao fim de cada fase; riscar quando resolvidos.
 - **(Fase 8) Cadeias na rodada final:** o humano passa por todos os estabelecimentos com cadeia, um de cada vez (inclusive os que já usaram a cadeia ao produzir); o bot usa todas até acabar os itens.
 - **(Fase 8) Empate total:** se total e sobra empatam, o resultado mostra "Empate!" (vitória compartilhada). Conferir com o manual.
 - **(Fase 8) Validação visual:** a partida completa chega ao fim nos testes, mas a tela de resultado não foi conferida pelo agente; conferir rodando `mvnw exec:java`.
+- **(Fase 9) Contador no título:** a faixa de cima da mesa é ocupada pela barra de status e as cartas começam logo abaixo, então moedas/pontos/cartas aparecem no título da janela, não na mesa.
+- **(Fase 9) Badge de produção:** o estabelecimento da vez mostra "Atento: falta N" (vermelho se não dá para produzir), contando o mercado e as cartas selecionadas; substitui a etiqueta do trabalhador/assistente durante a produção.
+- **(Fase 9) Janela maior:** passou para 1280×760 (limitada à tela), o que alivia o espaço dos oponentes e assistentes com 3–4 jogadores, mas o layout não foi refeito; os pontos de atenção das Fases 2, 6 e 7 continuam abertos.
+- **(Fase 9) Itens não feitos:** oponentes ainda jogam de uma vez (Fase 7) e a tela de resultado continua sendo um `JOptionPane` (Fase 8).
+- **(Fase 9) Validação:** testes e `.jar` conferidos (o jar lê banco e imagens de dentro dele), mas a tela inicial, a ajuda e os badges não foram conferidos na tela pelo agente; conferir com `java -jar target/OhMyGoods.jar`.
 - **(Fase 1) `JAVA_HOME`:** não estava definido no terminal do agente; foi preciso apontar para o JDK manualmente para rodar `mvnw`. Verificar a variável de ambiente do sistema.
 
 ---

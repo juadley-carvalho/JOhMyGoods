@@ -43,6 +43,7 @@ public class Game {
     private static final java.awt.Color PAYMENT_COLOR = new java.awt.Color(0x1565C0);
     private static final java.awt.Color ASSISTANT_COLOR = new java.awt.Color(0x6A1B9A);
     private static final java.awt.Color HIREABLE_COLOR = new java.awt.Color(0x1B5E20);
+    private static final java.awt.Color MISSING_COLOR = new java.awt.Color(0xB71C1C);
     private static final java.awt.Color UNAVAILABLE_COLOR = new java.awt.Color(0x555555);
 
     private final GameState state;
@@ -62,6 +63,7 @@ public class Game {
     private final java.util.Map<Player, String> lastTurn = new java.util.HashMap<>(); // resumo da última vez de cada oponente
     private boolean finalChains; // rodada final: as cadeias de todos os estabelecimentos já entraram na fila
     private java.util.function.Consumer<List<Scoring.Score>> onGameOver = ranking -> { };
+    private java.util.function.Consumer<String> onInfo = info -> { };
 
     /** Mesa vista pelos oponentes: bens comprados vão para a área deles; cartas gastas, para o descarte. */
     private final Bot.Table botTable = new Bot.Table() {
@@ -87,6 +89,7 @@ public class Game {
         this.table = table;
         table.onCardClick(this::isClickable, this::click);
         table.onTileClick(this::isTileClickable, this::clickTile);
+        table.onSelectionChange(this::updateStatus);
     }
 
     /**
@@ -144,6 +147,11 @@ public class Game {
     /** Chamado (com a classificação) quando o jogador pede o resultado ao fim da partida. */
     public void onGameOver(java.util.function.Consumer<List<Scoring.Score>> listener) {
         this.onGameOver = listener;
+    }
+
+    /** Recebe o resumo do jogador humano (moedas em bens, pontos, cartas) a cada mudança. */
+    public void onInfo(java.util.function.Consumer<String> listener) {
+        this.onInfo = listener;
     }
 
     /** Avança para a próxima etapa da rodada. */
@@ -612,6 +620,7 @@ public class Game {
         String starting = (state.isFinalRound() && !state.isGameOver() ? " (RODADA FINAL)" : "")
                 + (state.startingPlayer() == player ? " (você é o inicial)" : "");
         table.setStatus(phase.title + starting + "   |   " + hint);
+        refreshInfo();
         refreshWorkerBadge();
         refreshAssistants();
         refreshOpponents();
@@ -640,6 +649,13 @@ public class Game {
         table.setOpponents(views);
     }
 
+    /** Contador (no título da janela): moedas em bens (o que vale para pagar e para pontuar), pontos e cartas na mão. */
+    private void refreshInfo() {
+        Scoring.Score score = Scoring.score(player);
+        onInfo.accept(player.getName() + ":  " + score.coins() + " moedas em bens   |   " + score.total() + " pts   |   "
+                + player.getHand().size() + " cartas   |   H: ajuda");
+    }
+
     private String describePerson(Building building) {
         return building.getPerson() instanceof Assistant a ? a.toString() : "trabalhador";
     }
@@ -661,9 +677,28 @@ public class Game {
         payment.forEach((b, n) -> table.setBadge(b.getCard(), "Pagar " + n + " (" + n * b.getCard().getGoodValue() + ")",
                 PAYMENT_COLOR));
         Building building = player.getWorkerBuilding();
-        if (building == null) return;
-        boolean attentive = player.getWorker().getMode() == Worker.Mode.ATTENTIVE;
-        table.setBadge(building.getCard(), attentive ? "Atento" : "Distraído",
-                attentive ? ATTENTIVE_COLOR : DISTRACTED_COLOR);
+        if (building != null) {
+            boolean attentive = player.getWorker().getMode() == Worker.Mode.ATTENTIVE;
+            table.setBadge(building.getCard(), attentive ? "Atento" : "Distraído",
+                    attentive ? ATTENTIVE_COLOR : DISTRACTED_COLOR);
+        }
+        refreshProducerBadge();
+    }
+
+    /** Produção: o estabelecimento da vez mostra quantos recursos faltam (contando as cartas selecionadas). */
+    private void refreshProducerBadge() {
+        Building working = producers.peekFirst();
+        if (phase != Phase.PRODUCE || working == null) return;
+        java.util.Map<Resource, Integer> available = new java.util.EnumMap<>(Resource.class);
+        available.putAll(Production.freeResources(player, market));
+        player.getHand().stream().filter(Card::isSelected).forEach(c -> {
+            if (c.getResource() != null) available.merge(c.getResource(), 1, Integer::sum);
+        });
+        int missing = Production.shortfall(working.getCard(), available);
+        boolean enough = missing <= working.getPerson().missingAllowed();
+        String who = working.getPerson() instanceof Assistant a ? a.toString()
+                : player.getWorker().getMode() == Worker.Mode.ATTENTIVE ? "Atento" : "Distraído";
+        table.setBadge(working.getCard(), who + (missing == 0 ? ": ok" : ": falta " + missing),
+                enough ? ATTENTIVE_COLOR : MISSING_COLOR);
     }
 }

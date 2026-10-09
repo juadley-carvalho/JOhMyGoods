@@ -46,6 +46,7 @@ public class TablePanel extends JPanel {
     private Predicate<Card> clickable = card -> false;
     private Consumer<Card> clickAction = card -> { };
     private String status = "";
+    private Runnable selectionListener = () -> { };
     private List<Tile> tiles = List.of();
     private IntPredicate tileClickable = i -> false;
     private IntConsumer tileAction = i -> { };
@@ -185,6 +186,11 @@ public class TablePanel extends JPanel {
         repaint();
     }
 
+    /** Chamado quando o jogador seleciona ou desmarca uma carta da mão. */
+    public void onSelectionChange(Runnable listener) {
+        this.selectionListener = listener;
+    }
+
     /** Liga uma tecla a uma ação (funciona independente de qual componente tem o foco). */
     public void onKey(int keyCode, Runnable action) {
         String name = "key-" + keyCode;
@@ -280,6 +286,7 @@ public class TablePanel extends JPanel {
             sprite.getCard().toggleSelected();
             sprite.refreshTarget();
             startAnimation();
+            selectionListener.run();
         } else if (clickable.test(sprite.getCard())) {
             clickAction.accept(sprite.getCard());
         }

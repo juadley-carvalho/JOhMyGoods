@@ -8,13 +8,7 @@ No jogo, cada jogador administra uma pequena cadeia produtiva. Você junta recur
 
 ## Status
 
-**v0.1.0:** as fases I a III da rodada já funcionam:
-
-- Fase I: Nova Mão de Cartas
-- Fase II: Nascer do Sol
-- Fase III: Pôr do Sol
-
-A fase IV (Produzir e Construir) ainda não foi implementada.
+**v1.0:** partida completa de 2 a 4 jogadores (você contra oponentes controlados pelo computador): as quatro fases da rodada, cadeias de produção, construção, assistentes, rodada final e pontuação.
 
 ## Tecnologias
 
@@ -47,11 +41,17 @@ mvn -v
 ### Pela linha de comando
 
 ```bash
-mvn compile
-mvn exec:java -Dexec.mainClass=org.cardGames.Main
+./mvnw exec:java
 ```
 
-> Por enquanto, as imagens e o banco de dados são carregados por caminhos relativos (`src/main/...`). Por isso, o jogo precisa ser executado a partir da raiz do projeto. Isso será corrigido na Fase 0 do planejamento.
+### Como `.jar` executável
+
+```bash
+./mvnw package
+java -jar target/OhMyGoods.jar
+```
+
+O `.jar` já inclui o banco de cartas, as imagens e o driver do SQLite; basta ter Java 21+ instalado.
 
 ## Controles
 
@@ -59,14 +59,18 @@ mvn exec:java -Dexec.mainClass=org.cardGames.Main
 |---|---|
 | `ESPAÇO` | Avança para a próxima etapa da rodada |
 | `R` | Na Fase I, troca a mão inteira (opcional) |
+| `C` | No planejamento, separa a carta selecionada para construir |
+| `K` | Usa a cadeia de produção do estabelecimento da vez |
+| `N` | Não produzir / não construir |
+| `H` | Ajuda com as regras resumidas |
 
-A barra de status da janela mostra a fase atual e as ações disponíveis.
+Clique nas cartas da mão para selecioná-las e nos estabelecimentos para alocar o trabalhador e os assistentes. A barra de status mostra a fase atual e as ações disponíveis; o título da janela mostra suas moedas em bens, pontos e cartas na mão.
 
 O código está organizado em três camadas:
 
-- **Modelo:** `Card`, `Deck`, `Player`, `Resource`
-- **Regras:** `Game`
-- **Interface:** `MainWindow`, `TablePanel`, `CardSprite`, `Zone`
+- **Modelo:** `Card`, `Deck`, `Player`, `Building`, `Assistant`, `Worker`, `Market`, `Resource`, `GameState`
+- **Regras:** `Game`, `Production`, `Bot` (oponentes), `Scoring`, `Setup`
+- **Interface:** `MainWindow`, `StartScreen`, `Help`, `TablePanel`, `CardSprite`, `Zone`
 
 As regras não dependem da interface, então podem ser testadas sem abrir a janela.
 

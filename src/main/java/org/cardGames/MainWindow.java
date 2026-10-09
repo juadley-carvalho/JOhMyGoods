@@ -5,6 +5,7 @@ import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.function.Supplier;
@@ -19,7 +20,9 @@ public class MainWindow extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         TablePanel table = new TablePanel();
-        table.setPreferredSize(new Dimension(1024, 680)); // área de jogo, sem contar a barra de título
+        // Área de jogo, sem contar a barra de título: maior com mais jogadores, limitada à tela
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        table.setPreferredSize(new Dimension(Math.min(1280, screen.width - 40), Math.min(760, screen.height - 100)));
         add(table, BorderLayout.CENTER);
 
         Game game = new Game(newGame.get(), table);
@@ -28,7 +31,9 @@ public class MainWindow extends JFrame {
         table.onKey(KeyEvent.VK_C, game::planSelected);
         table.onKey(KeyEvent.VK_N, game::decline);
         table.onKey(KeyEvent.VK_K, game::runChain);
+        table.onKey(KeyEvent.VK_H, this::showHelp);
         game.onGameOver(this::showResult);
+        game.onInfo(info -> setTitle("Oh My Goods!   -   " + info));
 
         pack();
         setLocationRelativeTo(null);
@@ -36,6 +41,10 @@ public class MainWindow extends JFrame {
 
         // Depois do primeiro layout da janela, para a distribuição inicial aparecer animada
         SwingUtilities.invokeLater(game::start);
+    }
+
+    private void showHelp() {
+        JOptionPane.showMessageDialog(this, Help.TEXT, "Ajuda", JOptionPane.PLAIN_MESSAGE);
     }
 
     /** Tela de resultado: detalhamento da pontuação e opção de nova partida. */
