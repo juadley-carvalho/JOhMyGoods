@@ -54,6 +54,7 @@ public final class Snapshots {
             List<Card> burners = database.getCharcoalBurners();
             List<Assistant> assistants = database.getAssistants();
             database.closeConnection();
+            startShot(dir);
             for (int players : new int[]{2, 4}) {
                 GameState state = Setup.newGame(cards, burners, assistants, players, new Random(7));
                 new Snapshots(dir, players + "j", state).firstRound();
@@ -75,6 +76,29 @@ public final class Snapshots {
             }
         });
         System.exit(0);
+    }
+
+    /** Tela inicial, com o layout montado sem janela. */
+    private static void startShot(File dir) {
+        StartScreen start = new StartScreen(null, names -> { }, () -> { });
+        start.setSize(WIDTH, HEIGHT);
+        layout(start);
+        BufferedImage image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = image.createGraphics();
+        start.paint(g);
+        g.dispose();
+        try {
+            ImageIO.write(image, "png", new File(dir, "inicio.png"));
+        } catch (java.io.IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void layout(java.awt.Container container) {
+        container.doLayout();
+        for (java.awt.Component child : container.getComponents()) {
+            if (child instanceof java.awt.Container inner) layout(inner);
+        }
     }
 
     /** Mesa cheia: o humano começa com 6 estabelecimentos a mais, cada um com alguns bens. */
