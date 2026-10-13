@@ -42,7 +42,7 @@ public class CardSprite {
     public CardSprite(Card card, Zone zone) {
         this.card = card;
         this.zone = zone;
-        this.image = scale(card.getImage(), WIDTH, HEIGHT);
+        this.image = scale(card.getImage());
         this.faceDown = this.pendingFaceDown = zone.isFaceDown();
     }
 
@@ -136,7 +136,7 @@ public class CardSprite {
             URL url = CardSprite.class.getResource("/images/cards/verso.png");
             if (url != null) {
                 try {
-                    loaded = scale(ImageIO.read(url), WIDTH, HEIGHT);
+                    loaded = scale(ImageIO.read(url));
                 } catch (IOException ignored) {
                     // cai no verso provisório
                 }
@@ -163,16 +163,16 @@ public class CardSprite {
     }
 
     /** Reduz em passos de 1/2 e termina com bilinear: evita serrilhado em reduções grandes. */
-    private static BufferedImage scale(BufferedImage src, int w, int h) {
+    private static BufferedImage scale(BufferedImage src) {
         BufferedImage current = src;
         int cw = src.getWidth();
         int ch = src.getHeight();
-        while (cw / 2 >= w && ch / 2 >= h) {
+        while (cw / 2 >= CardSprite.WIDTH && ch / 2 >= CardSprite.HEIGHT) {
             cw /= 2;
             ch /= 2;
             current = drawScaled(current, cw, ch);
         }
-        return drawScaled(current, w, h);
+        return drawScaled(current, CardSprite.WIDTH, CardSprite.HEIGHT);
     }
 
     private static BufferedImage drawScaled(Image src, int w, int h) {
